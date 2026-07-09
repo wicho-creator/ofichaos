@@ -137,55 +137,54 @@ export class GameScene extends Phaser.Scene {
     const w = this.scale.width;
     const h = this.scale.height;
 
-    // Top command bar: clean, compact, game-like
-    const topBg = this.add.rectangle(w / 2, 42, Math.min(760, w - 56), 64, 0x0b1220, 0.88).setStrokeStyle(2, 0xfbbf24, 0.55);
-    const topGlow = this.add.rectangle(w / 2, 42, Math.min(780, w - 44), 74, 0xfbbf24, 0.04);
-    this.timerText = this.add.text(w / 2 - 145, 30, '⏱ 8:00', {
-      fontSize: '24px', color: '#fbbf24', fontStyle: 'bold'
+    // Top command bar, slimmer and away from map labels
+    createPanel(this, w / 2, 48, Math.min(740, w - 72), 68, 0x0b1220, { strokeColor: 0xfbbf24, strokeAlpha: 0.28, radius: 18 });
+    this.timerText = this.add.text(w / 2 - 150, 36, '⏱ 8:00', {
+      fontSize: '23px', color: '#fbbf24', fontStyle: 'bold'
     }).setOrigin(0.5, 0.5);
-    this.taskPercentText = this.add.text(w / 2 + 95, 30, '📋 Tareas 0%', {
-      fontSize: '19px', color: '#4ade80', fontStyle: 'bold'
+    this.taskPercentText = this.add.text(w / 2 + 95, 36, '📋 Tareas 0%', {
+      fontSize: '18px', color: '#4ade80', fontStyle: 'bold'
     }).setOrigin(0.5, 0.5);
-    this.add.text(w / 2, 58, 'Muévete con WASD/Flechas · Click en una zona cercana para tareas', {
-      fontSize: '12px', color: '#94a3b8'
+    this.add.text(w / 2, 61, 'WASD/Flechas para moverte · Click cerca de una zona para trabajar', {
+      fontSize: '11px', color: '#94a3b8'
     }).setOrigin(0.5);
 
-    // Role card, safely away from edges
+    // Bottom cards to avoid covering room names
     const roleColors = { jefe: '#ef4444', lamebotas: '#facc15', empleado: '#4ade80' };
     const roleName = { jefe: 'JEFE', lamebotas: 'LAMEBOTAS', empleado: 'EMPLEADO' };
-    const leftX = 230;
-    createPanel(this, leftX, 152, 300, 116, 0x111827);
-    this.roleDisplay = this.add.text(leftX, 113, `ROL: ${roleName[this.myRole] || '?'}`, {
+    const cardY = h - 96;
+    const roleX = 205;
+    createPanel(this, roleX, cardY, 330, 118, 0x111827, { strokeColor: 0x38bdf8, strokeAlpha: 0.24, radius: 20 });
+    this.roleDisplay = this.add.text(roleX, cardY - 34, `ROL: ${roleName[this.myRole] || '?'}`, {
       fontSize: '18px', color: roleColors[this.myRole] || '#94a3b8', fontStyle: 'bold'
     }).setOrigin(0.5);
-    this.add.text(leftX, 140, 'Objetivo secundario', { fontSize: '11px', color: '#94a3b8' }).setOrigin(0.5);
-    this.add.text(leftX, 170, this.roleText || 'Sobrevive al caos de la oficina', {
-      fontSize: '12px', color: '#f8fafc', align: 'center', wordWrap: { width: 252 }
+    this.add.text(roleX, cardY - 8, 'Objetivo secundario', { fontSize: '11px', color: '#94a3b8' }).setOrigin(0.5);
+    this.add.text(roleX, cardY + 24, this.roleText || 'Sobrevive al caos de la oficina', {
+      fontSize: '12px', color: '#f8fafc', align: 'center', wordWrap: { width: 274 }
     }).setOrigin(0.5);
 
-    // Tasks/morale card
-    const rightX = w - 245;
-    createPanel(this, rightX, 166, 340, 156, 0x111827);
-    this.add.text(rightX - 125, 104, '😊 Moral', { fontSize: '13px', color: '#cbd5e1', fontStyle: 'bold' });
-    this.moraleBar = this.add.rectangle(rightX + 30, 112, 185, 14, 0x334155).setOrigin(0.5);
-    this.moraleFill = this.add.rectangle(rightX - 62.5, 112, 185, 14, 0x4ade80).setOrigin(0, 0.5);
-    this.add.text(rightX - 125, 136, 'Tareas de oficina', { fontSize: '12px', color: '#94a3b8', fontStyle: 'bold' });
-    this.tasksList = this.add.text(rightX - 125, 158, '', {
-      fontSize: '11px', color: '#e2e8f0', lineSpacing: 3, wordWrap: { width: 268 }
+    const statusX = w - 220;
+    createPanel(this, statusX, h - 108, 350, 150, 0x111827, { strokeColor: 0x22c55e, strokeAlpha: 0.22, radius: 20 });
+    this.add.text(statusX - 132, h - 152, '😊 Moral del equipo', { fontSize: '13px', color: '#cbd5e1', fontStyle: 'bold' });
+    this.moraleBar = this.add.rectangle(statusX + 18, h - 144, 170, 14, 0x334155).setOrigin(0.5);
+    this.moraleFill = this.add.rectangle(statusX - 67, h - 144, 170, 14, 0x4ade80).setOrigin(0, 0.5);
+    this.add.text(statusX - 132, h - 122, 'Tareas activas', { fontSize: '12px', color: '#94a3b8', fontStyle: 'bold' });
+    this.tasksList = this.add.text(statusX - 132, h - 102, '', {
+      fontSize: '11px', color: '#e2e8f0', lineSpacing: 3, wordWrap: { width: 272 }
     }).setOrigin(0, 0);
 
-    // Action dock: centered-right, not clipped
-    const actionX = w - 170;
-    const actionBg = this.add.rectangle(actionX, 308, 74, 184, 0x0b1220, 0.82).setStrokeStyle(2, 0x475569, 0.75);
-    createButton(this, actionX, 250, '📋', () => net.callMeeting(), { width: 54, height: 54, bgColor: 0xdc2626, bgHover: 0xef4444, fontSize: '20px' });
+    // Bottom-center action dock separated from status panel
+    const actionY = h - 70;
+    createPanel(this, w / 2, actionY, 220, 84, 0x0b1220, { strokeColor: 0x64748b, strokeAlpha: 0.25, radius: 18 });
+    createButton(this, w / 2 - 44, actionY, '📋', () => net.callMeeting(), { width: 54, height: 54, bgColor: 0xdc2626, bgHover: 0xef4444, fontSize: '20px' });
     if (this.myRole === 'empleado') {
-      createButton(this, actionX, 314, '🚨', () => net.reportSabotage(), { width: 54, height: 54, bgColor: 0xf97316, bgHover: 0xfb923c, fontSize: '20px' });
+      createButton(this, w / 2 + 44, actionY, '🚨', () => net.reportSabotage(), { width: 54, height: 54, bgColor: 0xf97316, bgHover: 0xfb923c, fontSize: '20px' });
     }
     if (this.myRole === 'jefe' || this.myRole === 'lamebotas') {
-      createButton(this, actionX, 314, '💀', () => this.startSabotageMenu(), { width: 54, height: 54, bgColor: 0x7c2d12, bgHover: 0xdc2626, fontSize: '20px' });
+      createButton(this, w / 2 + 44, actionY, '💀', () => this.startSabotageMenu(), { width: 54, height: 54, bgColor: 0x7c2d12, bgHover: 0xdc2626, fontSize: '20px' });
     }
-    this.cooldownText = this.add.text(actionX, 366, '', {
-      fontSize: '10px', color: '#bbf7d0', align: 'center', wordWrap: { width: 92 }
+    this.cooldownText = this.add.text(w / 2, actionY + 38, '', {
+      fontSize: '10px', color: '#bbf7d0', align: 'center', wordWrap: { width: 190 }
     }).setOrigin(0.5, 0);
 
     this.createMobileControls();
