@@ -153,7 +153,7 @@ export class GameScene extends Phaser.Scene {
     // Role card, safely away from edges
     const roleColors = { jefe: '#ef4444', lamebotas: '#facc15', empleado: '#4ade80' };
     const roleName = { jefe: 'JEFE', lamebotas: 'LAMEBOTAS', empleado: 'EMPLEADO' };
-    const leftX = 180;
+    const leftX = 230;
     createPanel(this, leftX, 152, 300, 116, 0x111827);
     this.roleDisplay = this.add.text(leftX, 113, `ROL: ${roleName[this.myRole] || '?'}`, {
       fontSize: '18px', color: roleColors[this.myRole] || '#94a3b8', fontStyle: 'bold'
