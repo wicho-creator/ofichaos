@@ -157,6 +157,10 @@ PORT=3456 npm run dev  # puerto 3000 suele estar ocupado por Hermes
 | `sabotage:extra_task` | `{targetId}` | Asignar tarea extra (jefe) |
 | `sabotage:morale` | `{targetId}` | Bajar moral (jefe) |
 | `sabotage:close_door` | `{zoneId}` | Cerrar puerta (jefe) |
+| `sabotage:fake_task` | — | Fingir tarea (lamebotas) |
+| `sabotage:false_report` | — | Crear reporte falso (lamebotas) |
+| `sabotage:block_task` | `{taskId}` | Bloquear tarea temporalmente (lamebotas) |
+| `sabotage:report` | — | Reportar sabotaje cercano y abrir reunión (empleado) |
 | `meeting:call` | — | Convocar reunión |
 | `meeting:chat` | `{message}` | Mensaje de chat en reunión |
 | `vote:cast` | `{targetId}` | Votar jugador o "skip" |
@@ -178,6 +182,10 @@ PORT=3456 npm run dev  # puerto 3000 suele estar ocupado por Hermes
 | `sabotage:extra_task` | `{from}` | Tarea extra recibida |
 | `sabotage:morale` | `{from}` | Moral bajada |
 | `sabotage:door_closed` | `{zoneId, expires}` | Puerta cerrada |
+| `sabotage:fake_task` | `{playerId, fakeTasks}` | Confirmación privada de fake task |
+| `sabotage:false_report` | `{from, affected[]}` | Reporte falso difundido |
+| `sabotage:block_task` | `{taskId, expires}` | Tarea bloqueada temporalmente |
+| `sabotage:reported` | `{reportedBy, playerName, sabotageType, zoneId?, taskId?}` | Reporte de sabotaje válido |
 | `meeting:started` | `{calledBy, playerName}` | Reunión iniciada |
 | `meeting:chat` | `{playerId, playerName, message}` | Mensaje de chat |
 | `voting:started` | — | Fase de votación |
@@ -209,11 +217,11 @@ PORT=3456 npm run dev  # puerto 3000 suele estar ocupado por Hermes
 2. **Free tier sleep:** Render free duerme tras 15 min sin tráfico (~30 seg para despertar)
 3. **Sprites placeholder:** Los jugadores son círculos de color, no pixel art
 4. **Minijuegos simples:** Progress bar, clicks, sequence — no son minijuegos reales
-5. **Cámara fija:** El mapa entero se ve de una vez (sin cámara tipo Among Us que sigue al jugador)
+5. **Cámara:** Ya sigue al jugador con zoom; falta pulir colisiones/oclusiones estilo Among Us
 6. **Sin colisiones:** Los jugadores se mueven libremente sin chocar con mobiliario
 7. **Sistema de puntos simplificado:** Los cálculos de puntos son aproximados
-8. **Objetivos secundarios no se verifican:** Se asignan pero no se comprueba su cumplimiento
-9. **Sabotajes del lamebotas no implementados:** `fakeTask`, `falseReport`, `blockTask` no tienen eventos socket
-10. **Reportar sabotaje no implementado:** El empleado tiene la habilidad pero no hay evento/botón
+8. **Objetivos secundarios:** Ya se verifican en estado/puntos, pero algunas metas siguen simplificadas
+9. **Sabotajes del lamebotas:** `fakeTask`, `falseReport`, `blockTask` ya tienen eventos socket; falta balance fino con partidas humanas
+10. **Reportar sabotaje:** Ya existe evento/botón; falta pulir UI de evidencia y distancia por tipo de sabotaje
 
 ---

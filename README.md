@@ -49,10 +49,11 @@ Si el puerto está ocupado, usar `PORT=3456 npm run dev`.
 6. Cada jugador recibe un **rol secreto** y un **objetivo secundario** en pantalla.
 7. Moverse con **WASD** o las **flechas**.
 8. Hacer click en una zona cercana para iniciar una tarea.
-9. El Jefe y Lamebotas pueden sabotear con el botón 💀.
-10. Cualquier empleado puede convocar una reunión con el botón 📋 (una vez por partida).
-11. En la reunión: chatear (60 seg), luego votar (20 seg).
-12. El jugador más votado recibe una sanción.
+9. El Jefe y Lamebotas pueden sabotear con el botón 💀. Las habilidades tienen cooldown para evitar spam.
+10. Los empleados pueden reportar sabotajes cercanos con 🚨; esto convoca reunión si el reporte es válido.
+11. Cualquier empleado puede convocar una reunión con el botón 📋 (una vez por partida).
+12. En la reunión: chatear (60 seg), luego votar (20 seg).
+13. El jugador más votado recibe una sanción.
 
 ---
 
@@ -68,7 +69,12 @@ Si el puerto está ocupado, usar `PORT=3456 npm run dev`.
 
 ### Lamebotas 🟡
 - **Objetivo:** Ayudar al Jefe sin ser descubierto.
-- **Habilidades:** Fingir tarea, crear reporte falso, bloquear tarea.
+- **Habilidades:** Fingir tarea, crear reporte falso, bloquear tarea y sabotear zonas.
+
+### Cooldowns y reportes
+- Las habilidades muestran su cooldown en el HUD.
+- `fakeTask`, `falseReport` y `blockTask` ya tienen eventos reales de Socket.IO.
+- Un empleado puede reportar un sabotaje activo/cercano para abrir una reunión.
 
 ---
 
@@ -158,9 +164,9 @@ ofichaos/
 
 - [ ] **Roles adicionales:** Pasante, Integrista, Dinosaurio.
 - [ ] **Minijuegos reales** en lugar de barras de progreso (con perplejidad real).
-- [ ] **Sprites reales** en lugar de círculos de color (pixel art de oficina).
+- [x] **Sprites básicos mejorados** en lugar de círculos simples (personajes placeholder con rol visual).
 - [ ] **Colisiones** entre jugadores y mobiliario del mapa.
-- [ ] **Cámara** que sigue al jugador (currently fixed full-map).
+- [x] **Cámara** que sigue al jugador + zoom.
 - [ ] **Registro/Login** con persistencia de perfil.
 - [ ] **Estadísticas y ranking** entre partidas.
 - [ ] **Persistencia de salas** para reconexión tras desconexión.
@@ -170,8 +176,8 @@ ofichaos/
 - [ ] **Animaciones de sprites** (caminar, hacer tarea, sabotear).
 - [ ] **Efectos de sonido** y música de oficina.
 - [ ] **Notificaciones push** de sabotajes en pantalla.
-- [ ] **Cooldown indicator visual** en botones de habilidad.
-- [ ] **Persistencia de objetivo secundario** (verificar cumplimiento al final).
+- [x] **Cooldown indicator visual** en botones de habilidad.
+- [x] **Verificación de objetivo secundario** al final/payload de estado.
 - [ ] **Sistema de puntos completo** (actualmente simplificado en MVP).
 - [ ] **Tests automatizados** de lógica de juego (jest).
 - [ ] **Deploy en producción** (glitch/Render/Fly.io con Redis para salas).

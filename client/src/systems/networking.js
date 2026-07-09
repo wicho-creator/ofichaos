@@ -62,3 +62,8 @@ export function sabotageFalseReport() {
 export function sabotageBlockTask(taskId) {
   socket.emit('sabotage:block_task', { taskId });
 }
+
+
+export function reportSabotage() {
+  socket.emit('sabotage:report');
+}

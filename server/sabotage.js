@@ -162,6 +162,66 @@ function isInZone(player, zone) {
   );
 }
 
+
+const ABILITY_COOLDOWNS = {
+  zone: 30000,
+  extra_task: 45000,
+  lower_morale: 40000,
+  close_door: 35000,
+  fake_task: 20000,
+  false_report: 30000,
+  block_task: 25000,
+  report_sabotage: 25000
+};
+
+function checkCooldown(player, ability, now = Date.now()) {
+  player.abilityCooldowns = player.abilityCooldowns || {};
+  const readyAt = player.abilityCooldowns[ability] || 0;
+  if (readyAt > now) {
+    return { ok: false, remainingMs: readyAt - now };
+  }
+  return { ok: true, remainingMs: 0 };
+}
+
+function startCooldown(player, ability, now = Date.now()) {
+  player.abilityCooldowns = player.abilityCooldowns || {};
+  player.abilityCooldowns[ability] = now + (ABILITY_COOLDOWNS[ability] || 0);
+  return player.abilityCooldowns[ability];
+}
+
+function getCooldownPayload(player, now = Date.now()) {
+  const out = {};
+  for (const [ability, readyAt] of Object.entries(player.abilityCooldowns || {})) {
+    out[ability] = Math.max(0, readyAt - now);
+  }
+  return out;
+}
+
+function findReportableSabotage(room, playerId) {
+  const player = room.players[playerId];
+  if (!player || !room.gameState) return null;
+  const now = Date.now();
+  return (room.gameState.activeSabotages || []).find((s) => {
+    if (s.expires <= now) return false;
+    if (s.type === SABOTAGE_TYPES.ZONE || s.type === SABOTAGE_TYPES.CLOSE_DOOR) {
+      const zone = room.gameState.zones.find((z) => z.id === s.zoneId);
+      if (!zone) return false;
+      const cx = zone.x + zone.w / 2;
+      const cy = zone.y + zone.h / 2;
+      return Math.hypot(player.x - cx, player.y - cy) < 220;
+    }
+    if (s.type === SABOTAGE_TYPES.BLOCK_TASK) {
+      const task = room.gameState.taskStates.find((t) => t.id === s.taskId);
+      const zone = task && room.gameState.zones.find((z) => z.id === task.zone);
+      if (!zone) return false;
+      const cx = zone.x + zone.w / 2;
+      const cy = zone.y + zone.h / 2;
+      return Math.hypot(player.x - cx, player.y - cy) < 220;
+    }
+    return s.type === SABOTAGE_TYPES.FALSE_REPORT;
+  }) || null;
+}
+
 module.exports = {
   SABOTAGE_TYPES,
   SABOTAGE_EFFECTS,
@@ -174,5 +234,10 @@ module.exports = {
   fakeTask,
   falseReport,
   blockTask,
-  incrementSabotageStat
+  incrementSabotageStat,
+  ABILITY_COOLDOWNS,
+  checkCooldown,
+  startCooldown,
+  getCooldownPayload,
+  findReportableSabotage
 };

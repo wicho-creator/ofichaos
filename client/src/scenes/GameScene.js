@@ -27,6 +27,8 @@ export class GameScene extends Phaser.Scene {
     this.moraleBar = null;
     this.timerText = null;
     this.taskPercentText = null;
+    this.cooldownText = null;
+    this.mobileInput = { left: false, right: false, up: false, down: false };
 
     // Active task minigame
     this.activeTaskPanel = null;
@@ -126,47 +128,82 @@ export class GameScene extends Phaser.Scene {
 
   createHUD() {
     // Panel superior: timer + tareas
-    this.timerText = this.add.text(this.scale.width / 2, 20, '⏱ 8:00', {
+    this.timerText = this.add.text(this.scale.width / 2, 32, '⏱ 8:00', {
       fontSize: '24px',
       color: '#fbbf24',
       fontStyle: 'bold'
     }).setOrigin(0.5, 0);
-    this.taskPercentText = this.add.text(this.scale.width / 2, 50, 'Tareas: 0%', {
-      fontSize: '16px',
+    this.taskPercentText = this.add.text(this.scale.width / 2, 64, 'Tareas: 0%', {
+      fontSize: '18px',
       color: '#4ade80'
     }).setOrigin(0.5, 0);
 
     // Panel izquierdo: rol + objetivo
-    createPanel(this, 140, this.scale.height - 100, 250, 160, 0x16213e);
+    const leftHudX = 300;
+    const bottomHudY = this.scale.height - 112;
+    createPanel(this, leftHudX, bottomHudY, 300, 170, 0x16213e);
     const roleColors = { jefe: '#ef4444', lamebotas: '#facc15', empleado: '#4ade80' };
     const roleName = { jefe: 'JEFE', lamebotas: 'LAMEBOTAS', empleado: 'EMPLEADO' };
-    this.roleDisplay = this.add.text(140, this.scale.height - 165, `ROL: ${roleName[this.myRole] || '?'}`, {
+    this.roleDisplay = this.add.text(leftHudX, bottomHudY - 65, `ROL: ${roleName[this.myRole] || '?'}`, {
       fontSize: '16px',
       color: roleColors[this.myRole] || '#94a3b8',
       fontStyle: 'bold'
     }).setOrigin(0.5);
-    this.add.text(140, this.scale.height - 50, `Objetivo:`, { fontSize: '12px', color: '#94a3b8' }).setOrigin(0.5);
-    this.add.text(140, this.scale.height - 25, this.roleText || '', { fontSize: '11px', color: '#e0e0e0', wordWrap: { width: 220 } }).setOrigin(0.5);
+    this.add.text(leftHudX, bottomHudY + 30, `Objetivo:`, { fontSize: '12px', color: '#94a3b8' }).setOrigin(0.5);
+    this.add.text(leftHudX, bottomHudY + 55, this.roleText || '', { fontSize: '11px', color: '#e0e0e0', wordWrap: { width: 260 } }).setOrigin(0.5);
 
     // Panel derecho: moral + tareas
-    createPanel(this, this.scale.width - 140, this.scale.height - 100, 250, 160, 0x16213e);
-    this.add.text(this.scale.width - 140, this.scale.height - 165, ' 😊 Moral', { fontSize: '14px', color: '#e0e0e0' }).setOrigin(0.5);
-    this.moraleBar = this.add.rectangle(this.scale.width - 140, this.scale.height - 140, 200, 16, 0x334155);
-    this.moraleFill = this.add.rectangle(this.scale.width - 240, this.scale.height - 140, 200, 16, 0x4ade80).setOrigin(0, 0.5);
-    this.add.text(this.scale.width - 140, this.scale.height - 110, 'Tareas:', { fontSize: '12px', color: '#94a3b8' }).setOrigin(0.5);
-    this.tasksList = this.add.text(this.scale.width - 140, this.scale.height - 70, '', { fontSize: '11px', color: '#e0e0e0', wordWrap: { width: 220 } }).setOrigin(0.5);
+    const rightHudX = this.scale.width - 175;
+    createPanel(this, rightHudX, bottomHudY, 320, 170, 0x16213e);
+    this.add.text(rightHudX, bottomHudY - 65, '😊 Moral', { fontSize: '14px', color: '#e0e0e0' }).setOrigin(0.5);
+    this.moraleBar = this.add.rectangle(rightHudX, bottomHudY - 40, 230, 16, 0x334155);
+    this.moraleFill = this.add.rectangle(rightHudX - 115, bottomHudY - 40, 230, 16, 0x4ade80).setOrigin(0, 0.5);
+    this.add.text(rightHudX, bottomHudY - 10, 'Tareas:', { fontSize: '12px', color: '#94a3b8' }).setOrigin(0.5);
+    this.tasksList = this.add.text(rightHudX, bottomHudY + 35, '', { fontSize: '11px', color: '#e0e0e0', wordWrap: { width: 280 } }).setOrigin(0.5);
 
-    // Botón de reunión (esquina inferior derecha del HUD)
-    createButton(this, this.scale.width - 50, 60, '📋', () => {
-      net.callMeeting();
-    }, { width: 50, height: 50, bgColor: 0xdc2626, fontSize: '20px' });
-
-    // Botones de sabotaje (solo jefe/lamebotas)
-    if (this.myRole === 'jefe' || this.myRole === 'lamebotas') {
-      createButton(this, this.scale.width - 50, 130, '💀', () => {
-        this.startSabotageMenu();
-      }, { width: 50, height: 50, bgColor: 0x7c2d12, fontSize: '20px' });
+    // Acciones principales
+    const actionX = this.scale.width - 150;
+    createButton(this, actionX, 58, '📋', () => net.callMeeting(), { width: 54, height: 54, bgColor: 0xdc2626, fontSize: '20px' });
+    if (this.myRole === 'empleado') {
+      createButton(this, actionX, 122, '🚨', () => net.reportSabotage(), { width: 54, height: 54, bgColor: 0xf97316, bgHover: 0xfb923c, fontSize: '20px' });
     }
+    if (this.myRole === 'jefe' || this.myRole === 'lamebotas') {
+      createButton(this, actionX, 122, '💀', () => this.startSabotageMenu(), { width: 54, height: 54, bgColor: 0x7c2d12, fontSize: '20px' });
+    }
+    this.cooldownText = this.add.text(actionX, 186, '', { fontSize: '10px', color: '#fed7aa', align: 'center', wordWrap: { width: 110 } }).setOrigin(0.5, 0);
+
+    this.createMobileControls();
+  }
+
+  createMobileControls() {
+    if (this.scale.width > 900) return;
+    const baseX = 82;
+    const baseY = this.scale.height - 82;
+    const makePad = (x, y, label, key) => {
+      const btn = createButton(this, x, y, label, () => {}, { width: 38, height: 36, bgColor: 0x334155, bgHover: 0x475569, fontSize: '14px' });
+      btn.bg.on('pointerdown', () => { this.mobileInput[key] = true; });
+      btn.bg.on('pointerup', () => { this.mobileInput[key] = false; });
+      btn.bg.on('pointerout', () => { this.mobileInput[key] = false; });
+      btn.bg.setScrollFactor(0);
+      btn.label.setScrollFactor(0);
+    };
+    makePad(baseX, baseY - 38, '↑', 'up');
+    makePad(baseX, baseY + 38, '↓', 'down');
+    makePad(baseX - 40, baseY, '←', 'left');
+    makePad(baseX + 40, baseY, '→', 'right');
+  }
+
+  getCooldownLine(me) {
+    const cd = me?.cooldowns || {};
+    const interesting = this.myRole === 'empleado'
+      ? [['Reportar', cd.report_sabotage]]
+      : this.myRole === 'lamebotas'
+        ? [['Fake', cd.fake_task], ['Reporte', cd.false_report], ['Bloq', cd.block_task], ['Zona', cd.zone]]
+        : [['Zona', cd.zone], ['Moral', cd.lower_morale], ['Extra', cd.extra_task], ['Puerta', cd.close_door]];
+    return interesting
+      .filter(([, ms]) => ms > 0)
+      .map(([name, ms]) => `${name} ${Math.ceil(ms / 1000)}s`)
+      .join('\n');
   }
 
   setupSocketListeners() {
@@ -189,7 +226,7 @@ export class GameScene extends Phaser.Scene {
       // Actualizar posiciones de jugadores remotos
       if (data.players) {
         for (const pid of Object.keys(data.players)) {
-          if (pid !== this.myId && this.players[pid]) {
+          if (this.players[pid]) {
             Object.assign(this.players[pid], data.players[pid]);
           }
         }
@@ -213,7 +250,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     net.socket.on('sabotage:triggered', (data) => {
-      this.showFloatingText(`⚠ Sabotaje en ${data.zoneId}!`, 0xef4444);
+      const label = data.type === 'fake_task' ? 'un compañero está fingiendo trabajar' : `zona ${data.zoneId}`;
+      this.showFloatingText(`⚠ Sabotaje: ${label}`, 0xef4444);
     });
 
     net.socket.on('sabotage:extra_task', () => {
@@ -238,6 +276,11 @@ export class GameScene extends Phaser.Scene {
 
     net.socket.on('sabotage:block_task', ({ taskId }) => {
       this.showFloatingText(`⛔ Tarea bloqueada: ${taskId}`, 0xef4444);
+    });
+
+    net.socket.on('sabotage:reported', ({ playerName, sabotageType, zoneId, taskId }) => {
+      const where = zoneId || taskId || sabotageType;
+      this.showFloatingText(`🚨 ${playerName} reportó sabotaje: ${where}`, 0xf97316);
     });
 
     net.socket.on('meeting:started', ({ calledBy, playerName }) => {
@@ -293,7 +336,7 @@ export class GameScene extends Phaser.Scene {
     const me = this.players[this.myId];
     if (me) {
       const moralePct = Math.max(0, Math.min(100, me.morale));
-      this.moraleFill.width = Math.max(0, 200 * (moralePct / 100));
+      this.moraleFill.width = Math.max(0, 230 * (moralePct / 100));
       const moraleColor = moralePct > 60 ? 0x4ade80 : moralePct > 30 ? 0xfbbf24 : 0xef4444;
       this.moraleFill.setFillStyle(moraleColor);
     }
@@ -302,6 +345,12 @@ export class GameScene extends Phaser.Scene {
     if (gs.tasks) {
       const tasksStr = gs.tasks.map((t) => `${t.completed ? '✅' : t.blocked ? '⛔' : '⬜'} ${t.name}`).join('\n');
       this.tasksList.setText(tasksStr);
+    }
+
+    if (this.cooldownText) {
+      const line = this.getCooldownLine(me);
+      this.cooldownText.setText(line ? `Cooldowns:\n${line}` : 'Listo');
+      this.cooldownText.setColor(line ? '#fed7aa' : '#bbf7d0');
     }
   }
 
@@ -315,10 +364,10 @@ export class GameScene extends Phaser.Scene {
     if (me.burnout) speed = 125;
 
     let dx = 0, dy = 0;
-    if (this.cursors.left.isDown || this.wasd.A.isDown) dx -= 1;
-    if (this.cursors.right.isDown || this.wasd.D.isDown) dx += 1;
-    if (this.cursors.up.isDown || this.wasd.W.isDown) dy -= 1;
-    if (this.cursors.down.isDown || this.wasd.S.isDown) dy += 1;
+    if (this.cursors.left.isDown || this.wasd.A.isDown || this.mobileInput.left) dx -= 1;
+    if (this.cursors.right.isDown || this.wasd.D.isDown || this.mobileInput.right) dx += 1;
+    if (this.cursors.up.isDown || this.wasd.W.isDown || this.mobileInput.up) dy -= 1;
+    if (this.cursors.down.isDown || this.wasd.S.isDown || this.mobileInput.down) dy += 1;
 
     if (dx !== 0 || dy !== 0) {
       const len = Math.sqrt(dx * dx + dy * dy);
@@ -522,7 +571,7 @@ export class GameScene extends Phaser.Scene {
       fontStyle: 'bold',
       backgroundColor: '#00000088',
       padding: { x: 10, y: 5 }
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(9999);
     this.tweens.add({
       targets: ft,
       y: 60,
