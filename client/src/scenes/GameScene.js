@@ -58,6 +58,10 @@ export class GameScene extends Phaser.Scene {
     // Listeners socket
     this.setupSocketListeners();
 
+    if (data?.demoState) {
+      this.time.delayedCall(80, () => this.loadDemoState(data.demoState));
+    }
+
     // Throttled movement
     this.input.on('pointerdown', (pointer) => {
       this.handleMapClick(pointer);
@@ -69,8 +73,11 @@ export class GameScene extends Phaser.Scene {
   drawMap() {
     // Fondo general
     const g = this.add.graphics();
-    g.fillStyle(0x1a1a2e, 1);
+    g.fillStyle(0x101827, 1);
     g.fillRect(0, 0, 1200, 900);
+    g.lineStyle(1, 0x233044, 0.35);
+    for (let x = 0; x <= 1200; x += 60) g.lineBetween(x, 0, x, 900);
+    for (let y = 0; y <= 900; y += 60) g.lineBetween(0, y, 1200, y);
 
     // Zonas del mapa
     const zoneColors = {
@@ -127,52 +134,68 @@ export class GameScene extends Phaser.Scene {
   }
 
   createHUD() {
-    // Panel superior: timer + tareas
-    this.timerText = this.add.text(this.scale.width / 2, 32, '⏱ 8:00', {
-      fontSize: '24px',
-      color: '#fbbf24',
-      fontStyle: 'bold'
-    }).setOrigin(0.5, 0);
-    this.taskPercentText = this.add.text(this.scale.width / 2, 64, 'Tareas: 0%', {
-      fontSize: '18px',
-      color: '#4ade80'
-    }).setOrigin(0.5, 0);
+    const w = this.scale.width;
+    const h = this.scale.height;
 
-    // Panel izquierdo: rol + objetivo
-    const leftHudX = 300;
-    const bottomHudY = this.scale.height - 112;
-    createPanel(this, leftHudX, bottomHudY, 300, 170, 0x16213e);
+    // Top command bar: clean, compact, game-like
+    const topBg = this.add.rectangle(w / 2, 42, Math.min(760, w - 56), 64, 0x0b1220, 0.88).setStrokeStyle(2, 0xfbbf24, 0.55);
+    const topGlow = this.add.rectangle(w / 2, 42, Math.min(780, w - 44), 74, 0xfbbf24, 0.04);
+    this.timerText = this.add.text(w / 2 - 145, 30, '⏱ 8:00', {
+      fontSize: '24px', color: '#fbbf24', fontStyle: 'bold'
+    }).setOrigin(0.5, 0.5);
+    this.taskPercentText = this.add.text(w / 2 + 95, 30, '📋 Tareas 0%', {
+      fontSize: '19px', color: '#4ade80', fontStyle: 'bold'
+    }).setOrigin(0.5, 0.5);
+    this.add.text(w / 2, 58, 'Muévete con WASD/Flechas · Click en una zona cercana para tareas', {
+      fontSize: '12px', color: '#94a3b8'
+    }).setOrigin(0.5);
+
+    // Role card, safely away from edges
     const roleColors = { jefe: '#ef4444', lamebotas: '#facc15', empleado: '#4ade80' };
     const roleName = { jefe: 'JEFE', lamebotas: 'LAMEBOTAS', empleado: 'EMPLEADO' };
-    this.roleDisplay = this.add.text(leftHudX, bottomHudY - 65, `ROL: ${roleName[this.myRole] || '?'}`, {
-      fontSize: '16px',
-      color: roleColors[this.myRole] || '#94a3b8',
-      fontStyle: 'bold'
+    const leftX = 180;
+    createPanel(this, leftX, 152, 300, 116, 0x111827);
+    this.roleDisplay = this.add.text(leftX, 113, `ROL: ${roleName[this.myRole] || '?'}`, {
+      fontSize: '18px', color: roleColors[this.myRole] || '#94a3b8', fontStyle: 'bold'
     }).setOrigin(0.5);
-    this.add.text(leftHudX, bottomHudY + 30, `Objetivo:`, { fontSize: '12px', color: '#94a3b8' }).setOrigin(0.5);
-    this.add.text(leftHudX, bottomHudY + 55, this.roleText || '', { fontSize: '11px', color: '#e0e0e0', wordWrap: { width: 260 } }).setOrigin(0.5);
+    this.add.text(leftX, 140, 'Objetivo secundario', { fontSize: '11px', color: '#94a3b8' }).setOrigin(0.5);
+    this.add.text(leftX, 170, this.roleText || 'Sobrevive al caos de la oficina', {
+      fontSize: '12px', color: '#f8fafc', align: 'center', wordWrap: { width: 252 }
+    }).setOrigin(0.5);
 
-    // Panel derecho: moral + tareas
-    const rightHudX = this.scale.width - 175;
-    createPanel(this, rightHudX, bottomHudY, 320, 170, 0x16213e);
-    this.add.text(rightHudX, bottomHudY - 65, '😊 Moral', { fontSize: '14px', color: '#e0e0e0' }).setOrigin(0.5);
-    this.moraleBar = this.add.rectangle(rightHudX, bottomHudY - 40, 230, 16, 0x334155);
-    this.moraleFill = this.add.rectangle(rightHudX - 115, bottomHudY - 40, 230, 16, 0x4ade80).setOrigin(0, 0.5);
-    this.add.text(rightHudX, bottomHudY - 10, 'Tareas:', { fontSize: '12px', color: '#94a3b8' }).setOrigin(0.5);
-    this.tasksList = this.add.text(rightHudX, bottomHudY + 35, '', { fontSize: '11px', color: '#e0e0e0', wordWrap: { width: 280 } }).setOrigin(0.5);
+    // Tasks/morale card
+    const rightX = w - 245;
+    createPanel(this, rightX, 166, 340, 156, 0x111827);
+    this.add.text(rightX - 125, 104, '😊 Moral', { fontSize: '13px', color: '#cbd5e1', fontStyle: 'bold' });
+    this.moraleBar = this.add.rectangle(rightX + 30, 112, 185, 14, 0x334155).setOrigin(0.5);
+    this.moraleFill = this.add.rectangle(rightX - 62.5, 112, 185, 14, 0x4ade80).setOrigin(0, 0.5);
+    this.add.text(rightX - 125, 136, 'Tareas de oficina', { fontSize: '12px', color: '#94a3b8', fontStyle: 'bold' });
+    this.tasksList = this.add.text(rightX - 125, 158, '', {
+      fontSize: '11px', color: '#e2e8f0', lineSpacing: 3, wordWrap: { width: 268 }
+    }).setOrigin(0, 0);
 
-    // Acciones principales
-    const actionX = this.scale.width - 150;
-    createButton(this, actionX, 58, '📋', () => net.callMeeting(), { width: 54, height: 54, bgColor: 0xdc2626, fontSize: '20px' });
+    // Action dock: centered-right, not clipped
+    const actionX = w - 170;
+    const actionBg = this.add.rectangle(actionX, 308, 74, 184, 0x0b1220, 0.82).setStrokeStyle(2, 0x475569, 0.75);
+    createButton(this, actionX, 250, '📋', () => net.callMeeting(), { width: 54, height: 54, bgColor: 0xdc2626, bgHover: 0xef4444, fontSize: '20px' });
     if (this.myRole === 'empleado') {
-      createButton(this, actionX, 122, '🚨', () => net.reportSabotage(), { width: 54, height: 54, bgColor: 0xf97316, bgHover: 0xfb923c, fontSize: '20px' });
+      createButton(this, actionX, 314, '🚨', () => net.reportSabotage(), { width: 54, height: 54, bgColor: 0xf97316, bgHover: 0xfb923c, fontSize: '20px' });
     }
     if (this.myRole === 'jefe' || this.myRole === 'lamebotas') {
-      createButton(this, actionX, 122, '💀', () => this.startSabotageMenu(), { width: 54, height: 54, bgColor: 0x7c2d12, fontSize: '20px' });
+      createButton(this, actionX, 314, '💀', () => this.startSabotageMenu(), { width: 54, height: 54, bgColor: 0x7c2d12, bgHover: 0xdc2626, fontSize: '20px' });
     }
-    this.cooldownText = this.add.text(actionX, 186, '', { fontSize: '10px', color: '#fed7aa', align: 'center', wordWrap: { width: 110 } }).setOrigin(0.5, 0);
+    this.cooldownText = this.add.text(actionX, 366, '', {
+      fontSize: '10px', color: '#bbf7d0', align: 'center', wordWrap: { width: 92 }
+    }).setOrigin(0.5, 0);
 
     this.createMobileControls();
+  }
+
+  loadDemoState(gs) {
+    this.gameState = gs;
+    this.syncPlayers(gs);
+    this.updateHUD(gs);
+    this.showFloatingText('🧪 Sala demo cargada: probá tareas, sabotajes y cámara', 0xfbbf24);
   }
 
   createMobileControls() {
@@ -327,7 +350,7 @@ export class GameScene extends Phaser.Scene {
 
     // Task percent
     if (gs.taskPercent != null) {
-      this.taskPercentText.setText(`Tareas: ${gs.taskPercent}%`);
+      this.taskPercentText.setText(`📋 Tareas ${gs.taskPercent}%`);
       const color = gs.taskPercent >= 80 ? '#4ade80' : '#fbbf24';
       this.taskPercentText.setColor(color);
     }
@@ -565,7 +588,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   showFloatingText(text, color = 0xffffff) {
-    const ft = this.add.text(this.scale.width / 2, 100, text, {
+    const ft = this.add.text(this.scale.width / 2, 92, text, {
       fontSize: '16px',
       color: '#' + color.toString(16).padStart(6, '0'),
       fontStyle: 'bold',
@@ -574,7 +597,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(9999);
     this.tweens.add({
       targets: ft,
-      y: 60,
+      y: 74,
       alpha: 0,
       duration: 2500,
       onComplete: () => ft.destroy()

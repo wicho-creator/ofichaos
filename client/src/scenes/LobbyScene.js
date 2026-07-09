@@ -17,7 +17,7 @@ export class LobbyScene extends Phaser.Scene {
     document.getElementById('loading')?.classList.add('hidden');
     this.cameras.main.setBackgroundColor('#1a1a2e');
 
-    createPanel(this, this.scale.width / 2, this.scale.height / 2, 500, 480, 0x16213e);
+    createPanel(this, this.scale.width / 2, this.scale.height / 2, 560, 540, 0x16213e);
     createText(this, this.scale.width / 2, 60, 'OFICHAOS', { fontSize: '48px', color: '#fbbf24', bold: true }).setOrigin(0.5);
     createText(this, this.scale.width / 2, 100, 'El caos de la oficina', { fontSize: '18px', color: '#94a3b8' }).setOrigin(0.5);
 
@@ -52,9 +52,13 @@ export class LobbyScene extends Phaser.Scene {
       net.joinRoom(code, name);
     });
 
+    createButton(this, this.scale.width / 2, btnY + 60, '🧪 Probar sala demo', () => {
+      this.startDemoRoom(nameEl.value || 'Wicho');
+    }, { width: 300, height: 46, bgColor: 0xf59e0b, bgHover: 0xfbbf24, textColor: '#111827', fontSize: '16px' });
+
     // Área de info de sala
-    this.infoText = createText(this, this.scale.width / 2, btnY + 60, 'Aún no estás en una sala.', { fontSize: '14px', color: '#94a3b8' }).setOrigin(0.5);
-    this.playersText = createText(this, this.scale.width / 2, btnY + 120, '', { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
+    this.infoText = createText(this, this.scale.width / 2, btnY + 120, 'Aún no estás en una sala.', { fontSize: '14px', color: '#94a3b8' }).setOrigin(0.5);
+    this.playersText = createText(this, this.scale.width / 2, btnY + 180, '', { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
     this.startButton = null;
 
     // Listeners de socket
@@ -122,5 +126,35 @@ export class LobbyScene extends Phaser.Scene {
 
   showMessage(msg) {
     if (this.infoText) this.infoText.setText(msg);
+  }
+
+  startDemoRoom(name = 'Wicho') {
+    const demoState = {
+      phase: 'playing',
+      timeRemaining: 7 * 60 * 1000 + 35 * 1000,
+      taskPercent: 20,
+      tasks: [
+        { id: 'reporte', name: 'Imprimir reporte', zone: 'recepcion', completed: false },
+        { id: 'correos', name: 'Responder correos', zone: 'cubiculos', completed: true },
+        { id: 'cafe', name: 'Preparar café', zone: 'cocina', completed: false },
+        { id: 'archivos', name: 'Ordenar archivos', zone: 'archivo', completed: false, blocked: true, blockedUntil: Date.now() + 12000 },
+        { id: 'wifi', name: 'Arreglar WiFi', zone: 'servidor', completed: false }
+      ],
+      players: [
+        { id: 'demo-me', name, x: 220, y: 190, morale: 86, role: 'empleado', tasksCompleted: 1, burnout: false, secondaryObjectiveDone: false, cooldowns: { report_sabotage: 16000 } },
+        { id: 'demo-jefe', name: 'La Jefa', x: 800, y: 470, morale: 100, role: 'jefe', tasksCompleted: 0, burnout: false, cooldowns: {} },
+        { id: 'demo-lame', name: 'Lame Pro', x: 520, y: 455, morale: 95, role: 'lamebotas', tasksCompleted: 0, burnout: false, cooldowns: {} },
+        { id: 'demo-ana', name: 'Ana', x: 560, y: 205, morale: 72, role: 'empleado', tasksCompleted: 1, burnout: false, cooldowns: {} }
+      ],
+      activeSabotages: [{ type: 'block_task', taskId: 'archivos', expires: Date.now() + 12000 }]
+    };
+    this.scene.stop('LobbyScene');
+    this.scene.start('GameScene', {
+      roomCode: 'DEMO',
+      myId: 'demo-me',
+      myRole: 'empleado',
+      roleText: 'Reportar un sabotaje sin quemarte',
+      demoState
+    });
   }
 }
