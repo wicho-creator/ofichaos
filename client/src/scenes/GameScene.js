@@ -41,13 +41,17 @@ export class GameScene extends Phaser.Scene {
 
     // Mapa de oficina (fondo)
     this.drawMap();
+    this.cameras.main.setBounds(0, 0, 1200, 900);
+    this.cameras.main.setZoom(1.15);
 
     // Controles
     this.cursors = this.input.keyboard.createCursorKeys();
     this.wasd = this.input.keyboard.addKeys('W,A,S,D');
 
-    // HUD
+    // HUD fijo en pantalla aunque la cámara siga al jugador
+    const worldChildCount = this.children.list.length;
     this.createHUD();
+    this.children.list.slice(worldChildCount).forEach((child) => child.setScrollFactor?.(0));
 
     // Listeners socket
     this.setupSocketListeners();
@@ -224,6 +228,18 @@ export class GameScene extends Phaser.Scene {
       this.showFloatingText(`Puerta cerrada: ${zoneId}`, 0xf59e0b);
     });
 
+    net.socket.on('sabotage:fake_task', () => {
+      this.showFloatingText('Fingiste una tarea. Nadie sospecha... todavía.', 0xfacc15);
+    });
+
+    net.socket.on('sabotage:false_report', () => {
+      this.showFloatingText('📣 Reporte falso: la oficina entra en pánico', 0xef4444);
+    });
+
+    net.socket.on('sabotage:block_task', ({ taskId }) => {
+      this.showFloatingText(`⛔ Tarea bloqueada: ${taskId}`, 0xef4444);
+    });
+
     net.socket.on('meeting:started', ({ calledBy, playerName }) => {
       this.showFloatingText(`Reunión convocada por ${playerName}`, 0xfbbf24);
       this.scene.stop('GameScene');
@@ -247,6 +263,9 @@ export class GameScene extends Phaser.Scene {
       if (!this.players[p.id]) {
         this.players[p.id] = { ...p };
         this.sprites[p.id] = createPlayerSprite(this, p, p.id === this.myId);
+        if (p.id === this.myId) {
+          this.cameras.main.startFollow(this.sprites[p.id].container, true, 0.12, 0.12);
+        }
       }
       Object.assign(this.players[p.id], p);
     }
@@ -281,7 +300,7 @@ export class GameScene extends Phaser.Scene {
 
     // Tasks list
     if (gs.tasks) {
-      const tasksStr = gs.tasks.map((t) => `${t.completed ? '✅' : '⬜'} ${t.name}`).join('\n');
+      const tasksStr = gs.tasks.map((t) => `${t.completed ? '✅' : t.blocked ? '⛔' : '⬜'} ${t.name}`).join('\n');
       this.tasksList.setText(tasksStr);
     }
   }
@@ -326,6 +345,8 @@ export class GameScene extends Phaser.Scene {
 
   handleMapClick(pointer) {
     // Verificar si click está cerca de una zona con tarea
+    const clickX = pointer.worldX;
+    const clickY = pointer.worldY;
     const zones = [
       { id: 'recepcion', name: 'Recepción', x: 100, y: 100, w: 250, h: 200 },
       { id: 'cubiculos', name: 'Cubículos', x: 450, y: 100, w: 300, h: 200 },
@@ -338,7 +359,7 @@ export class GameScene extends Phaser.Scene {
     ];
 
     for (const z of zones) {
-      if (pointer.x >= z.x && pointer.x <= z.x + z.w && pointer.y >= z.y && pointer.y <= z.y + z.h) {
+      if (clickX >= z.x && clickX <= z.x + z.w && clickY >= z.y && clickY <= z.y + z.h) {
         const task = CLIENT_TASKS.find((t) => t.zone === z.id);
         if (task) {
           const me = this.players[this.myId];
@@ -360,6 +381,10 @@ export class GameScene extends Phaser.Scene {
     // Verificar si ya está completada
     if (this.gameState?.tasks) {
       const ts = this.gameState.tasks.find((t) => t.id === task.id);
+      if (ts?.blocked) {
+        this.showFloatingText('Esta tarea está bloqueada por el lamebotas', 0xef4444);
+        return;
+      }
       if (ts?.completed) {
         this.showFloatingText('Esta tarea ya está completada', 0xfbbf24);
         return;
@@ -412,6 +437,7 @@ export class GameScene extends Phaser.Scene {
         taskId: task.id,
         elements: [panel, title, desc, clickText, clickBtn.bg, clickBtn.label]
       };
+      this.activeTaskPanel.elements.forEach((el) => el.setScrollFactor?.(0));
       return;
     } else if (task.type === 'sequence') {
       let steps = 0;
@@ -430,6 +456,7 @@ export class GameScene extends Phaser.Scene {
         taskId: task.id,
         elements: [panel, title, desc, stepText, stepBtn.bg, stepBtn.label]
       };
+      this.activeTaskPanel.elements.forEach((el) => el.setScrollFactor?.(0));
       return;
     }
 
@@ -441,6 +468,7 @@ export class GameScene extends Phaser.Scene {
       taskId: task.id,
       elements: [panel, title, desc, closeBtn.bg, closeBtn.label, progressBar, progressFill].filter(Boolean)
     };
+    this.activeTaskPanel.elements.forEach((el) => el.setScrollFactor?.(0));
   }
 
   closeTaskPanel() {
@@ -452,23 +480,39 @@ export class GameScene extends Phaser.Scene {
   }
 
   startSabotageMenu() {
-    // Menú simple: elegir zona para sabotear
-    const zones = ['recepcion', 'cubiculos', 'juntas', 'cocina', 'archivo', 'jefe_oficina', 'rh', 'servidor'];
     const panelX = this.scale.width / 2;
     const panelY = this.scale.height / 2;
-    createPanel(this, panelX, panelY, 350, 300, 0x7c2d12);
-    createText(this, panelX, panelY - 120, 'SABOTAJE', { fontSize: '20px', color: '#ef4444', bold: true }).setOrigin(0.5);
+    const panel = createPanel(this, panelX, panelY, 410, this.myRole === 'lamebotas' ? 330 : 300, 0x7c2d12);
+    const title = createText(this, panelX, panelY - 135, this.myRole === 'lamebotas' ? 'SABOTAJES LAMEBOTAS' : 'SABOTAJE', { fontSize: '20px', color: '#ef4444', bold: true }).setOrigin(0.5);
 
-    const buttons = [];
-    let btnY = panelY - 70;
-    for (const zid of zones) {
-      const btn = createButton(this, panelX, btnY, zid.toUpperCase(), () => {
-        net.sabotageZone(zid);
-        buttons.forEach((b) => { b.bg.destroy(); b.label.destroy(); });
-      }, { width: 200, height: 25, bgColor: 0x991b1b, bgHover: 0xdc2626, fontSize: '12px' });
-      buttons.push(btn);
-      btnY += 30;
+    const elements = [panel, title];
+    const closeMenu = () => elements.forEach((el) => el?.destroy && el.destroy());
+
+    if (this.myRole === 'lamebotas') {
+      const actions = [
+        ['Fingir tarea (+moral)', () => net.sabotageFakeTask()],
+        ['Reporte falso (-moral global)', () => net.sabotageFalseReport()],
+        ['Bloquear tarea aleatoria', () => {
+          const task = (this.gameState?.tasks || []).find((t) => !t.completed && !t.blocked);
+          if (task) net.sabotageBlockTask(task.id);
+          else this.showFloatingText('No hay tareas bloqueables', 0xfbbf24);
+        }]
+      ];
+      actions.forEach(([label, fn], idx) => {
+        const btn = createButton(this, panelX, panelY - 80 + idx * 55, label, () => { fn(); closeMenu(); }, { width: 280, height: 38, bgColor: 0x991b1b, bgHover: 0xdc2626, fontSize: '13px' });
+        elements.push(btn.bg, btn.label);
+      });
     }
+
+    const zones = ['recepcion', 'cubiculos', 'juntas', 'cocina', 'archivo', 'jefe_oficina', 'rh', 'servidor'];
+    const startY = this.myRole === 'lamebotas' ? panelY + 90 : panelY - 70;
+    zones.forEach((zid, i) => {
+      const x = panelX + (i % 2 === 0 ? -100 : 100);
+      const y = startY + Math.floor(i / 2) * 30;
+      const btn = createButton(this, x, y, zid.toUpperCase(), () => { net.sabotageZone(zid); closeMenu(); }, { width: 180, height: 24, bgColor: 0x991b1b, bgHover: 0xdc2626, fontSize: '11px' });
+      elements.push(btn.bg, btn.label);
+    });
+    elements.forEach((el) => el.setScrollFactor?.(0));
   }
 
   showFloatingText(text, color = 0xffffff) {

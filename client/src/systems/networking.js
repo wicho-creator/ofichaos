@@ -49,3 +49,16 @@ export function sabotageMorale(targetId) {
 export function sabotageCloseDoor(zoneId) {
   socket.emit('sabotage:close_door', { zoneId });
 }
+
+
+export function sabotageFakeTask() {
+  socket.emit('sabotage:fake_task');
+}
+
+export function sabotageFalseReport() {
+  socket.emit('sabotage:false_report');
+}
+
+export function sabotageBlockTask(taskId) {
+  socket.emit('sabotage:block_task', { taskId });
+}

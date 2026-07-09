@@ -8,6 +8,7 @@ const { Server } = require('socket.io');
 const roomManager = require('./roomManager');
 const sabotage = require('./sabotage');
 const { ZONES } = require('./tasks');
+const { updateSecondaryObjectives } = require('./gameState');
 
 const app = express();
 const server = http.createServer(app);
@@ -144,7 +145,7 @@ io.on('connection', (socket) => {
     const p = room.players[playerId];
     if (!p || p.role !== 'jefe') return;
 
-    sabotage.assignExtraTask(room, targetId);
+    sabotage.assignExtraTask(room, targetId, playerId);
     io.to(targetId).emit('sabotage:extra_task', { from: playerId });
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
@@ -156,7 +157,7 @@ io.on('connection', (socket) => {
     const p = room.players[playerId];
     if (!p || p.role !== 'jefe') return;
 
-    sabotage.lowerMorale(room, targetId);
+    sabotage.lowerMorale(room, targetId, playerId);
     io.to(targetId).emit('sabotage:morale', { from: playerId });
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
@@ -173,6 +174,48 @@ io.on('connection', (socket) => {
       zoneId,
       expires: Date.now() + 15000
     });
+    io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
+  });
+
+
+  socket.on('sabotage:fake_task', () => {
+    if (!currentRoom) return;
+    const room = roomManager.getRoom(currentRoom);
+    if (!room || !room.gameState) return;
+    const p = room.players[playerId];
+    if (!p || p.role !== 'lamebotas') return;
+    const result = sabotage.fakeTask(room, playerId);
+    updateSecondaryObjectives(room);
+    socket.emit('sabotage:fake_task', result);
+    io.to(currentRoom).emit('sabotage:triggered', { type: 'fake_task', saboteurId: undefined });
+    io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
+  });
+
+  socket.on('sabotage:false_report', () => {
+    if (!currentRoom) return;
+    const room = roomManager.getRoom(currentRoom);
+    if (!room || !room.gameState) return;
+    const p = room.players[playerId];
+    if (!p || p.role !== 'lamebotas') return;
+    const result = sabotage.falseReport(room, playerId);
+    updateSecondaryObjectives(room);
+    io.to(currentRoom).emit('sabotage:false_report', { from: playerId, affected: result?.affected || [] });
+    io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
+  });
+
+  socket.on('sabotage:block_task', ({ taskId }) => {
+    if (!currentRoom) return;
+    const room = roomManager.getRoom(currentRoom);
+    if (!room || !room.gameState) return;
+    const p = room.players[playerId];
+    if (!p || p.role !== 'lamebotas') return;
+    const result = sabotage.blockTask(room, taskId, playerId);
+    if (!result) {
+      socket.emit('error:message', { message: 'No se pudo bloquear esa tarea' });
+      return;
+    }
+    updateSecondaryObjectives(room);
+    io.to(currentRoom).emit('sabotage:block_task', result);
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
 
@@ -290,7 +333,9 @@ function getGamePayload(code) {
       id: t.id,
       name: t.name,
       zone: t.zone,
-      completed: t.completed
+      completed: t.completed,
+      blockedUntil: t.blockedUntil || 0,
+      blocked: !!(t.blockedUntil && t.blockedUntil > Date.now())
     })),
     zones: ZONES,
     players: Object.values(room.players).map((p) => ({
@@ -301,11 +346,13 @@ function getGamePayload(code) {
       morale: p.morale,
       role: p.role, // se filtra en cliente según corresponda
       tasksCompleted: p.tasksCompleted || 0,
-      burnout: gs.burnedOutPlayers.has(p.id)
+      burnout: gs.burnedOutPlayers.has(p.id),
+      secondaryObjectiveDone: !!p.secondaryObjectiveDone
     })),
     meetingTimer: gs.meetingTimer,
     votingTimer: gs.votingTimer,
-    activeSabotages: gs.activeSabotages.map((s) => ({ ...s, saboteurId: undefined }))
+    activeSabotages: gs.activeSabotages.map((s) => ({ ...s, saboteurId: undefined })),
+    secondaryObjectiveStatus: gs.secondaryObjectiveStatus
   };
 }
 
@@ -323,7 +370,9 @@ function getEndPayload(code, result) {
       role: p.role,
       points: gs.points[p.id] || 0,
       tasksCompleted: p.tasksCompleted || 0,
-      sanctions: p.sanctions || 0
+      sanctions: p.sanctions || 0,
+      secondaryObjectiveText: p.secondaryObjectiveText || '',
+      secondaryObjectiveDone: !!p.secondaryObjectiveDone
     }))
   };
 }

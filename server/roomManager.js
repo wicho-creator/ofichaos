@@ -1,6 +1,6 @@
 // roomManager.js — Gestión de salas privadas con códigos
 
-const { startGame, tickGame, startMeeting, startVoting, castVote, endVoting } = require('./gameState');
+const { startGame, tickGame, startMeeting, startVoting, castVote, endVoting, updateSecondaryObjectives } = require('./gameState');
 
 const rooms = {}; // roomCode -> room
 
@@ -123,6 +123,7 @@ function completeTask(code, playerId, taskId) {
   if (!room || !room.gameState) return { error: 'No hay partida activa' };
   const task = room.gameState.taskStates.find((t) => t.id === taskId);
   if (!task || task.completed) return { error: 'Tarea no disponible' };
+  if (task.blockedUntil && Date.now() < task.blockedUntil) return { error: 'Tarea bloqueada temporalmente por sabotaje' };
   const p = room.players[playerId];
   if (!p) return { error: 'Jugador no encontrado' };
   if (p.burnoutUntil && Date.now() < p.burnoutUntil) return { error: 'En burnout' };
@@ -130,8 +131,11 @@ function completeTask(code, playerId, taskId) {
   task.completed = true;
   task.completedBy = playerId;
   p.tasksCompleted = (p.tasksCompleted || 0) + 1;
+  p.completedTaskZones = p.completedTaskZones || [];
+  if (task.zone && !p.completedTaskZones.includes(task.zone)) p.completedTaskZones.push(task.zone);
   p.morale = Math.min(100, p.morale + 5);
   room.gameState.points[playerId] = (room.gameState.points[playerId] || 0) + 10;
+  updateSecondaryObjectives(room);
 
   return { success: true, task };
 }
