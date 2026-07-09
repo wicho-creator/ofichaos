@@ -44,11 +44,12 @@ export class GameScene extends Phaser.Scene {
     // Mapa de oficina (fondo)
     this.drawMap();
     this.cameras.main.setBounds(0, 0, 1200, 900);
-    this.cameras.main.setZoom(1.15);
+    this.cameras.main.setZoom(this.scale.height < 700 ? 0.9 : 1.15);
 
     // Controles
     this.cursors = this.input.keyboard.createCursorKeys();
     this.wasd = this.input.keyboard.addKeys('W,A,S,D');
+    this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
     // HUD fijo en pantalla aunque la cámara siga al jugador
     const worldChildCount = this.children.list.length;
@@ -66,6 +67,7 @@ export class GameScene extends Phaser.Scene {
     this.input.on('pointerdown', (pointer) => {
       this.handleMapClick(pointer);
     });
+    this.input.keyboard.on('keydown-E', () => this.tryOpenNearbyTask());
 
     console.log('[GameScene] Iniciada', { role: this.myRole, roleText: this.roleText });
   }
@@ -136,56 +138,61 @@ export class GameScene extends Phaser.Scene {
   createHUD() {
     const w = this.scale.width;
     const h = this.scale.height;
+    const compact = h < 700;
 
-    // Top command bar, slimmer and away from map labels
-    createPanel(this, w / 2, 48, Math.min(740, w - 72), 68, 0x0b1220, { strokeColor: 0xfbbf24, strokeAlpha: 0.28, radius: 18 });
-    this.timerText = this.add.text(w / 2 - 150, 36, '⏱ 8:00', {
-      fontSize: '23px', color: '#fbbf24', fontStyle: 'bold'
+    createPanel(this, w / 2, compact ? 58 : 52, Math.min(690, w - 120), compact ? 56 : 68, 0x0b1220, { strokeColor: 0xfbbf24, strokeAlpha: 0.28, radius: 18 });
+    this.timerText = this.add.text(w / 2 - 128, compact ? 51 : 46, '⏱ 8:00', {
+      fontSize: compact ? '20px' : '22px', color: '#fbbf24', fontStyle: 'bold'
     }).setOrigin(0.5, 0.5);
-    this.taskPercentText = this.add.text(w / 2 + 95, 36, '📋 Tareas 0%', {
-      fontSize: '18px', color: '#4ade80', fontStyle: 'bold'
+    this.taskPercentText = this.add.text(w / 2 + 84, compact ? 51 : 46, '📋 Tareas 0%', {
+      fontSize: compact ? '16px' : '17px', color: '#4ade80', fontStyle: 'bold'
     }).setOrigin(0.5, 0.5);
-    this.add.text(w / 2, 61, 'WASD/Flechas para moverte · Click cerca de una zona para trabajar', {
-      fontSize: '11px', color: '#94a3b8'
+    this.add.text(w / 2, compact ? 68 : 68, 'WASD/Flechas · E o botón azul para trabajar', {
+      fontSize: '10px', color: '#94a3b8'
     }).setOrigin(0.5);
 
-    // Bottom cards to avoid covering room names
     const roleColors = { jefe: '#ef4444', lamebotas: '#facc15', empleado: '#4ade80' };
     const roleName = { jefe: 'JEFE', lamebotas: 'LAMEBOTAS', empleado: 'EMPLEADO' };
-    const cardY = h - 96;
-    const roleX = 205;
-    createPanel(this, roleX, cardY, 330, 118, 0x111827, { strokeColor: 0x38bdf8, strokeAlpha: 0.24, radius: 20 });
-    this.roleDisplay = this.add.text(roleX, cardY - 34, `ROL: ${roleName[this.myRole] || '?'}`, {
-      fontSize: '18px', color: roleColors[this.myRole] || '#94a3b8', fontStyle: 'bold'
+    const roleW = compact ? 270 : 320;
+    const roleH = compact ? 88 : 104;
+    const roleX = compact ? 205 : 210;
+    const roleY = compact ? h - 126 : h - 154;
+    createPanel(this, roleX, roleY, roleW, roleH, 0x111827, { strokeColor: 0x38bdf8, strokeAlpha: 0.24, radius: 20 });
+    this.roleDisplay = this.add.text(roleX, roleY - (compact ? 22 : 28), `ROL: ${roleName[this.myRole] || '?'}`, {
+      fontSize: compact ? '15px' : '17px', color: roleColors[this.myRole] || '#94a3b8', fontStyle: 'bold'
     }).setOrigin(0.5);
-    this.add.text(roleX, cardY - 8, 'Objetivo secundario', { fontSize: '11px', color: '#94a3b8' }).setOrigin(0.5);
-    this.add.text(roleX, cardY + 24, this.roleText || 'Sobrevive al caos de la oficina', {
-      fontSize: '12px', color: '#f8fafc', align: 'center', wordWrap: { width: 274 }
+    this.add.text(roleX, roleY + (compact ? -1 : -3), 'Objetivo secundario', { fontSize: '10px', color: '#94a3b8' }).setOrigin(0.5);
+    this.add.text(roleX, roleY + (compact ? 18 : 21), this.roleText || 'Sobrevive al caos de la oficina', {
+      fontSize: compact ? '10px' : '11px', color: '#f8fafc', align: 'center', wordWrap: { width: compact ? 214 : 260 }
     }).setOrigin(0.5);
 
-    const statusX = w - 220;
-    createPanel(this, statusX, h - 108, 350, 150, 0x111827, { strokeColor: 0x22c55e, strokeAlpha: 0.22, radius: 20 });
-    this.add.text(statusX - 132, h - 152, '😊 Moral del equipo', { fontSize: '13px', color: '#cbd5e1', fontStyle: 'bold' });
-    this.moraleBar = this.add.rectangle(statusX + 18, h - 144, 170, 14, 0x334155).setOrigin(0.5);
-    this.moraleFill = this.add.rectangle(statusX - 67, h - 144, 170, 14, 0x4ade80).setOrigin(0, 0.5);
-    this.add.text(statusX - 132, h - 122, 'Tareas activas', { fontSize: '12px', color: '#94a3b8', fontStyle: 'bold' });
-    this.tasksList = this.add.text(statusX - 132, h - 102, '', {
-      fontSize: '11px', color: '#e2e8f0', lineSpacing: 3, wordWrap: { width: 272 }
+    const statusW = compact ? 294 : 342;
+    const statusH = compact ? 108 : 130;
+    const statusX = compact ? w - 205 : w - 215;
+    const statusY = compact ? h - 130 : h - 160;
+    createPanel(this, statusX, statusY, statusW, statusH, 0x111827, { strokeColor: 0x22c55e, strokeAlpha: 0.22, radius: 20 });
+    this.add.text(statusX - (compact ? 108 : 126), statusY - (compact ? 34 : 42), '😊 Moral del equipo', { fontSize: compact ? '12px' : '13px', color: '#cbd5e1', fontStyle: 'bold' });
+    this.moraleBar = this.add.rectangle(statusX + (compact ? 8 : 18), statusY - (compact ? 26 : 34), compact ? 146 : 168, 14, 0x334155).setOrigin(0.5);
+    this.moraleFill = this.add.rectangle(statusX - (compact ? 65 : 66), statusY - (compact ? 26 : 34), compact ? 146 : 168, 14, 0x4ade80).setOrigin(0, 0.5);
+    this.add.text(statusX - (compact ? 108 : 126), statusY - (compact ? 7 : 12), 'Tareas activas', { fontSize: '11px', color: '#94a3b8', fontStyle: 'bold' });
+    this.tasksList = this.add.text(statusX - (compact ? 108 : 126), statusY + (compact ? 11 : 8), '', {
+      fontSize: compact ? '10px' : '11px', color: '#e2e8f0', lineSpacing: 2, wordWrap: { width: compact ? 220 : 268 }
     }).setOrigin(0, 0);
 
-    // Bottom-center action dock separated from status panel
-    const actionY = h - 70;
-    createPanel(this, w / 2, actionY, 220, 84, 0x0b1220, { strokeColor: 0x64748b, strokeAlpha: 0.25, radius: 18 });
-    createButton(this, w / 2 - 44, actionY, '📋', () => net.callMeeting(), { width: 54, height: 54, bgColor: 0xdc2626, bgHover: 0xef4444, fontSize: '20px' });
+    const actionY = compact ? h - 76 : h - 82;
+    createPanel(this, w / 2, actionY, compact ? 228 : 280, compact ? 72 : 94, 0x0b1220, { strokeColor: 0x64748b, strokeAlpha: 0.25, radius: 18 });
+    const btnY = compact ? actionY - 7 : actionY - 8;
+    createButton(this, w / 2 - 58, btnY, '📋', () => net.callMeeting(), { width: compact ? 44 : 50, height: compact ? 42 : 48, bgColor: 0xdc2626, bgHover: 0xef4444, fontSize: '18px', radius: 14 });
+    createButton(this, w / 2, btnY, '🛠', () => this.tryOpenNearbyTask(), { width: compact ? 44 : 50, height: compact ? 42 : 48, bgColor: 0x2563eb, bgHover: 0x3b82f6, fontSize: '18px', radius: 14 });
     if (this.myRole === 'empleado') {
-      createButton(this, w / 2 + 44, actionY, '🚨', () => net.reportSabotage(), { width: 54, height: 54, bgColor: 0xf97316, bgHover: 0xfb923c, fontSize: '20px' });
+      createButton(this, w / 2 + 58, btnY, '🚨', () => net.reportSabotage(), { width: compact ? 44 : 50, height: compact ? 42 : 48, bgColor: 0xf97316, bgHover: 0xfb923c, fontSize: '18px', radius: 14 });
     }
     if (this.myRole === 'jefe' || this.myRole === 'lamebotas') {
-      createButton(this, w / 2 + 44, actionY, '💀', () => this.startSabotageMenu(), { width: 54, height: 54, bgColor: 0x7c2d12, bgHover: 0xdc2626, fontSize: '20px' });
+      createButton(this, w / 2 + 58, btnY, '💀', () => this.startSabotageMenu(), { width: compact ? 44 : 50, height: compact ? 42 : 48, bgColor: 0x7c2d12, bgHover: 0xdc2626, fontSize: '18px', radius: 14 });
     }
-    this.cooldownText = this.add.text(w / 2, actionY + 38, '', {
-      fontSize: '10px', color: '#bbf7d0', align: 'center', wordWrap: { width: 190 }
-    }).setOrigin(0.5, 0);
+    this.cooldownText = this.add.text(w / 2, actionY + (compact ? 14 : 22), '', {
+      fontSize: '10px', color: '#bbf7d0', align: 'center', wordWrap: { width: compact ? 206 : 190 }
+    }).setOrigin(0.5, 0.5);
 
     this.createMobileControls();
   }
@@ -416,6 +423,41 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  getTaskInteractionDistance() {
+    return this.scale.height < 700 ? 170 : 135;
+  }
+
+  tryOpenNearbyTask() {
+    const me = this.players[this.myId];
+    if (!me) return;
+    const zones = [
+      { id: 'recepcion', name: 'Recepción', x: 100, y: 100, w: 250, h: 200 },
+      { id: 'cubiculos', name: 'Cubículos', x: 450, y: 100, w: 300, h: 200 },
+      { id: 'juntas', name: 'Sala de Juntas', x: 850, y: 100, w: 250, h: 200 },
+      { id: 'cocina', name: 'Cocina', x: 100, y: 400, w: 200, h: 180 },
+      { id: 'archivo', name: 'Archivo', x: 400, y: 400, w: 200, h: 180 },
+      { id: 'jefe_oficina', name: 'Oficina del Jefe', x: 700, y: 400, w: 200, h: 180 },
+      { id: 'rh', name: 'Recursos Humanos', x: 100, y: 650, w: 250, h: 180 },
+      { id: 'servidor', name: 'Servidor / IT', x: 500, y: 650, w: 250, h: 180 }
+    ];
+    let nearestTask = null;
+    let minDist = Infinity;
+    for (const z of zones) {
+      const task = CLIENT_TASKS.find((t) => t.zone === z.id);
+      if (!task) continue;
+      const dist = Phaser.Math.Distance.Between(me.x, me.y, z.x + z.w / 2, z.y + z.h / 2);
+      if (dist < minDist) {
+        minDist = dist;
+        nearestTask = task;
+      }
+    }
+    if (nearestTask && minDist < this.getTaskInteractionDistance()) {
+      this.openTaskPanel(nearestTask);
+    } else {
+      this.showFloatingText('Acércate a una zona y presiona E para trabajar', 0xfbbf24);
+    }
+  }
+
   handleMapClick(pointer) {
     // Verificar si click está cerca de una zona con tarea
     const clickX = pointer.worldX;
@@ -438,7 +480,7 @@ export class GameScene extends Phaser.Scene {
           const me = this.players[this.myId];
           if (me) {
             const dist = Phaser.Math.Distance.Between(me.x, me.y, z.x + z.w / 2, z.y + z.h / 2);
-            if (dist < 120) {
+            if (dist < this.getTaskInteractionDistance()) {
               this.openTaskPanel(task);
             } else {
               this.showFloatingText('Acércate a la zona para hacer la tarea', 0xfbbf24);
