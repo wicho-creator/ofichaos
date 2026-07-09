@@ -1,0 +1,29 @@
+{
+  "name": "ofichaos",
+  "version": "1.0.0",
+  "description": "OfiChaos - Juego multijugador online tipo Among Us ambientado en una oficina toxica y comica",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "node server/index.js",
+    "start": "node server/index.js",
+    "build": "echo 'No build step needed for MVP - client served statically'",
+    "test": "echo 'No tests in MVP - pending for v2'"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "keywords": [
+    "game",
+    "multiplayer",
+    "phaser",
+    "socket-io",
+    "among-us",
+    "office"
+  ],
+  "author": "W",
+  "license": "MIT",
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}

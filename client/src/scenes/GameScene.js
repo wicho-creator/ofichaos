@@ -1,0 +1,490 @@
+// GameScene.js — Escena principal de juego: mapa, movimiento, tareas, HUD
+
+import * as net from '../systems/networking.js';
+import { createButton, createPanel, createText } from '../systems/ui.js';
+import { createPlayerSprite, updatePlayerSprite } from '../systems/player.js';
+import { TASKS as CLIENT_TASKS } from '../systems/tasks.js';
+
+export class GameScene extends Phaser.Scene {
+  constructor() {
+    super({ key: 'GameScene' });
+    this.roomCode = null;
+    this.myId = null;
+    this.myRole = null;
+    this.roleText = '';
+    this.players = {};
+    this.sprites = {};
+    this.cursors = null;
+    this.wasd = null;
+    this.gameState = null;
+    this.lastMoveTime = 0;
+    this.moveThrottle = 80;
+
+    // HUD elements
+    this.hudText = null;
+    this.roleDisplay = null;
+    this.tasksList = null;
+    this.moraleBar = null;
+    this.timerText = null;
+    this.taskPercentText = null;
+
+    // Active task minigame
+    this.activeTaskPanel = null;
+  }
+
+  create(data) {
+    this.cameras.main.setBackgroundColor('#0f0f23');
+    this.roomCode = data?.roomCode;
+    this.myId = data?.myId;
+    this.myRole = data?.myRole;
+    this.roleText = data?.roleText || '';
+
+    // Mapa de oficina (fondo)
+    this.drawMap();
+
+    // Controles
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.wasd = this.input.keyboard.addKeys('W,A,S,D');
+
+    // HUD
+    this.createHUD();
+
+    // Listeners socket
+    this.setupSocketListeners();
+
+    // Throttled movement
+    this.input.on('pointerdown', (pointer) => {
+      this.handleMapClick(pointer);
+    });
+
+    console.log('[GameScene] Iniciada', { role: this.myRole, roleText: this.roleText });
+  }
+
+  drawMap() {
+    // Fondo general
+    const g = this.add.graphics();
+    g.fillStyle(0x1a1a2e, 1);
+    g.fillRect(0, 0, 1200, 900);
+
+    // Zonas del mapa
+    const zoneColors = {
+      recepcion: 0x3b82f6,
+      cubiculos: 0x10b981,
+      juntas: 0xf59e0b,
+      cocina: 0xef4444,
+      archivo: 0x8b5cf6,
+      jefe_oficina: 0xdc2626,
+      rh: 0x06b6d4,
+      servidor: 0x6366f1
+    };
+
+    const zones = [
+      { id: 'recepcion', name: 'Recepción', x: 100, y: 100, w: 250, h: 200 },
+      { id: 'cubiculos', name: 'Cubículos', x: 450, y: 100, w: 300, h: 200 },
+      { id: 'juntas', name: 'Sala de Juntas', x: 850, y: 100, w: 250, h: 200 },
+      { id: 'cocina', name: 'Cocina', x: 100, y: 400, w: 200, h: 180 },
+      { id: 'archivo', name: 'Archivo', x: 400, y: 400, w: 200, h: 180 },
+      { id: 'jefe_oficina', name: 'Oficina del Jefe', x: 700, y: 400, w: 200, h: 180 },
+      { id: 'rh', name: 'Recursos Humanos', x: 100, y: 650, w: 250, h: 180 },
+      { id: 'servidor', name: 'Servidor / IT', x: 500, y: 650, w: 250, h: 180 }
+    ];
+
+    for (const z of zones) {
+      const color = zoneColors[z.id] || 0x475569;
+      g.fillStyle(color, 0.15);
+      g.fillRect(z.x, z.y, z.w, z.h);
+      g.lineStyle(3, color, 0.5);
+      g.strokeRect(z.x, z.y, z.w, z.h);
+      this.add.text(z.x + z.w / 2, z.y + 15, z.name, {
+        fontSize: '14px',
+        color: '#94a3b8',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+
+      // Marcar tareas disponibles en cada zona
+      const taskInZone = CLIENT_TASKS.find((t) => t.zone === z.id);
+      if (taskInZone) {
+        this.add.text(z.x + z.w / 2, z.y + z.h - 15, `📋 ${taskInZone.name}`, {
+          fontSize: '12px',
+          color: '#fbbf24'
+        }).setOrigin(0.5);
+      }
+    }
+
+    // Caminos entre zonas (líneas decorativas)
+    g.lineStyle(2, 0x334155, 0.3);
+    g.lineBetween(350, 200, 450, 200); // recepción -> cubículos
+    g.lineBetween(750, 200, 850, 200); // cubículos -> juntas
+    g.lineBetween(225, 300, 225, 400); // recepción -> cocina
+    g.lineBetween(500, 300, 500, 400); // cubículos -> archivo
+    g.lineBetween(800, 300, 800, 400); // juntas -> jefe
+  }
+
+  createHUD() {
+    // Panel superior: timer + tareas
+    this.timerText = this.add.text(this.scale.width / 2, 20, '⏱ 8:00', {
+      fontSize: '24px',
+      color: '#fbbf24',
+      fontStyle: 'bold'
+    }).setOrigin(0.5, 0);
+    this.taskPercentText = this.add.text(this.scale.width / 2, 50, 'Tareas: 0%', {
+      fontSize: '16px',
+      color: '#4ade80'
+    }).setOrigin(0.5, 0);
+
+    // Panel izquierdo: rol + objetivo
+    createPanel(this, 140, this.scale.height - 100, 250, 160, 0x16213e);
+    const roleColors = { jefe: '#ef4444', lamebotas: '#facc15', empleado: '#4ade80' };
+    const roleName = { jefe: 'JEFE', lamebotas: 'LAMEBOTAS', empleado: 'EMPLEADO' };
+    this.roleDisplay = this.add.text(140, this.scale.height - 165, `ROL: ${roleName[this.myRole] || '?'}`, {
+      fontSize: '16px',
+      color: roleColors[this.myRole] || '#94a3b8',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    this.add.text(140, this.scale.height - 50, `Objetivo:`, { fontSize: '12px', color: '#94a3b8' }).setOrigin(0.5);
+    this.add.text(140, this.scale.height - 25, this.roleText || '', { fontSize: '11px', color: '#e0e0e0', wordWrap: { width: 220 } }).setOrigin(0.5);
+
+    // Panel derecho: moral + tareas
+    createPanel(this, this.scale.width - 140, this.scale.height - 100, 250, 160, 0x16213e);
+    this.add.text(this.scale.width - 140, this.scale.height - 165, ' 😊 Moral', { fontSize: '14px', color: '#e0e0e0' }).setOrigin(0.5);
+    this.moraleBar = this.add.rectangle(this.scale.width - 140, this.scale.height - 140, 200, 16, 0x334155);
+    this.moraleFill = this.add.rectangle(this.scale.width - 240, this.scale.height - 140, 200, 16, 0x4ade80).setOrigin(0, 0.5);
+    this.add.text(this.scale.width - 140, this.scale.height - 110, 'Tareas:', { fontSize: '12px', color: '#94a3b8' }).setOrigin(0.5);
+    this.tasksList = this.add.text(this.scale.width - 140, this.scale.height - 70, '', { fontSize: '11px', color: '#e0e0e0', wordWrap: { width: 220 } }).setOrigin(0.5);
+
+    // Botón de reunión (esquina inferior derecha del HUD)
+    createButton(this, this.scale.width - 50, 60, '📋', () => {
+      net.callMeeting();
+    }, { width: 50, height: 50, bgColor: 0xdc2626, fontSize: '20px' });
+
+    // Botones de sabotaje (solo jefe/lamebotas)
+    if (this.myRole === 'jefe' || this.myRole === 'lamebotas') {
+      createButton(this, this.scale.width - 50, 130, '💀', () => {
+        this.startSabotageMenu();
+      }, { width: 50, height: 50, bgColor: 0x7c2d12, fontSize: '20px' });
+    }
+  }
+
+  setupSocketListeners() {
+    net.socket.on('game:started', (gs) => {
+      this.gameState = gs;
+      this.syncPlayers(gs);
+      this.updateHUD(gs);
+    });
+
+    net.socket.on('game:update', (gs) => {
+      this.gameState = gs;
+      this.syncPlayers(gs);
+      this.updateHUD(gs);
+    });
+
+    net.socket.on('game:tick', (data) => {
+      if (!this.gameState) this.gameState = {};
+      this.gameState.timeRemaining = data.timeRemaining;
+      this.gameState.taskPercent = data.taskPercent;
+      // Actualizar posiciones de jugadores remotos
+      if (data.players) {
+        for (const pid of Object.keys(data.players)) {
+          if (pid !== this.myId && this.players[pid]) {
+            Object.assign(this.players[pid], data.players[pid]);
+          }
+        }
+      }
+      this.updateHUD(this.gameState);
+    });
+
+    net.socket.on('player:moved', ({ playerId, x, y }) => {
+      if (this.players[playerId]) {
+        this.players[playerId].x = x;
+        this.players[playerId].y = y;
+      }
+    });
+
+    net.socket.on('task:completed', ({ taskId, completedBy, playerName }) => {
+      const task = CLIENT_TASKS.find((t) => t.id === taskId);
+      this.showFloatingText(`${playerName} completó: ${task?.name || taskId}`, 0x4ade80);
+      if (this.activeTaskPanel && this.activeTaskPanel.taskId === taskId) {
+        this.closeTaskPanel();
+      }
+    });
+
+    net.socket.on('sabotage:triggered', (data) => {
+      this.showFloatingText(`⚠ Sabotaje en ${data.zoneId}!`, 0xef4444);
+    });
+
+    net.socket.on('sabotage:extra_task', () => {
+      this.showFloatingText('Asignaste tarea extra! -10 moral', 0xef4444);
+    });
+
+    net.socket.on('sabotage:morale', () => {
+      this.showFloatingText('Moral bajada por el jefe! -20', 0xef4444);
+    });
+
+    net.socket.on('sabotage:door_closed', ({ zoneId }) => {
+      this.showFloatingText(`Puerta cerrada: ${zoneId}`, 0xf59e0b);
+    });
+
+    net.socket.on('meeting:started', ({ calledBy, playerName }) => {
+      this.showFloatingText(`Reunión convocada por ${playerName}`, 0xfbbf24);
+      this.scene.stop('GameScene');
+      this.scene.launch('MeetingScene', { roomCode: this.roomCode, myId: this.myId, myRole: this.myRole });
+      this.scene.bringToTop('MeetingScene');
+    });
+
+    net.socket.on('game:ended', (data) => {
+      this.scene.stop('GameScene');
+      this.scene.start('EndScene', data);
+    });
+
+    net.socket.on('error:message', ({ message }) => {
+      this.showFloatingText(message, 0xef4444);
+    });
+  }
+
+  syncPlayers(gs) {
+    if (!gs || !gs.players) return;
+    for (const p of gs.players) {
+      if (!this.players[p.id]) {
+        this.players[p.id] = { ...p };
+        this.sprites[p.id] = createPlayerSprite(this, p, p.id === this.myId);
+      }
+      Object.assign(this.players[p.id], p);
+    }
+  }
+
+  updateHUD(gs) {
+    if (!gs) return;
+
+    // Timer
+    if (gs.timeRemaining != null) {
+      const secs = Math.ceil(gs.timeRemaining / 1000);
+      const mins = Math.floor(secs / 60);
+      const remSecs = secs % 60;
+      this.timerText.setText(`⏱ ${mins}:${remSecs.toString().padStart(2, '0')}`);
+    }
+
+    // Task percent
+    if (gs.taskPercent != null) {
+      this.taskPercentText.setText(`Tareas: ${gs.taskPercent}%`);
+      const color = gs.taskPercent >= 80 ? '#4ade80' : '#fbbf24';
+      this.taskPercentText.setColor(color);
+    }
+
+    // Moral
+    const me = this.players[this.myId];
+    if (me) {
+      const moralePct = Math.max(0, Math.min(100, me.morale));
+      this.moraleFill.width = Math.max(0, 200 * (moralePct / 100));
+      const moraleColor = moralePct > 60 ? 0x4ade80 : moralePct > 30 ? 0xfbbf24 : 0xef4444;
+      this.moraleFill.setFillStyle(moraleColor);
+    }
+
+    // Tasks list
+    if (gs.tasks) {
+      const tasksStr = gs.tasks.map((t) => `${t.completed ? '✅' : '⬜'} ${t.name}`).join('\n');
+      this.tasksList.setText(tasksStr);
+    }
+  }
+
+  update(time, delta) {
+    // Movimiento del jugador local
+    const me = this.players[this.myId];
+    if (!me) return;
+
+    // No mover si está en burnout (el servidor lo maneja, pero reducimos visualmente)
+    let speed = 250;
+    if (me.burnout) speed = 125;
+
+    let dx = 0, dy = 0;
+    if (this.cursors.left.isDown || this.wasd.A.isDown) dx -= 1;
+    if (this.cursors.right.isDown || this.wasd.D.isDown) dx += 1;
+    if (this.cursors.up.isDown || this.wasd.W.isDown) dy -= 1;
+    if (this.cursors.down.isDown || this.wasd.S.isDown) dy += 1;
+
+    if (dx !== 0 || dy !== 0) {
+      const len = Math.sqrt(dx * dx + dy * dy);
+      dx /= len; dy /= len;
+      me.x += dx * speed * (delta / 1000);
+      me.y += dy * speed * (delta / 1000);
+      me.x = Phaser.Math.Clamp(me.x, 20, 1180);
+      me.y = Phaser.Math.Clamp(me.y, 20, 880);
+
+      // Throttle send to server
+      if (time - this.lastMoveTime > this.moveThrottle) {
+        net.sendMove(me.x, me.y);
+        this.lastMoveTime = time;
+      }
+    }
+
+    // Actualizar sprites
+    for (const pid of Object.keys(this.players)) {
+      if (this.sprites[pid]) {
+        updatePlayerSprite(this.sprites[pid], this.players[pid]);
+      }
+    }
+  }
+
+  handleMapClick(pointer) {
+    // Verificar si click está cerca de una zona con tarea
+    const zones = [
+      { id: 'recepcion', name: 'Recepción', x: 100, y: 100, w: 250, h: 200 },
+      { id: 'cubiculos', name: 'Cubículos', x: 450, y: 100, w: 300, h: 200 },
+      { id: 'juntas', name: 'Sala de Juntas', x: 850, y: 100, w: 250, h: 200 },
+      { id: 'cocina', name: 'Cocina', x: 100, y: 400, w: 200, h: 180 },
+      { id: 'archivo', name: 'Archivo', x: 400, y: 400, w: 200, h: 180 },
+      { id: 'jefe_oficina', name: 'Oficina del Jefe', x: 700, y: 400, w: 200, h: 180 },
+      { id: 'rh', name: 'Recursos Humanos', x: 100, y: 650, w: 250, h: 180 },
+      { id: 'servidor', name: 'Servidor / IT', x: 500, y: 650, w: 250, h: 180 }
+    ];
+
+    for (const z of zones) {
+      if (pointer.x >= z.x && pointer.x <= z.x + z.w && pointer.y >= z.y && pointer.y <= z.y + z.h) {
+        const task = CLIENT_TASKS.find((t) => t.zone === z.id);
+        if (task) {
+          const me = this.players[this.myId];
+          if (me) {
+            const dist = Phaser.Math.Distance.Between(me.x, me.y, z.x + z.w / 2, z.y + z.h / 2);
+            if (dist < 120) {
+              this.openTaskPanel(task);
+            } else {
+              this.showFloatingText('Acércate a la zona para hacer la tarea', 0xfbbf24);
+            }
+          }
+        }
+        return;
+      }
+    }
+  }
+
+  openTaskPanel(task) {
+    // Verificar si ya está completada
+    if (this.gameState?.tasks) {
+      const ts = this.gameState.tasks.find((t) => t.id === task.id);
+      if (ts?.completed) {
+        this.showFloatingText('Esta tarea ya está completada', 0xfbbf24);
+        return;
+      }
+    }
+
+    if (this.activeTaskPanel) this.closeTaskPanel();
+
+    const panelX = this.scale.width / 2;
+    const panelY = this.scale.height / 2;
+
+    const panel = createPanel(this, panelX, panelY, 350, 250, 0x16213e);
+    const title = createText(this, panelX, panelY - 90, task.name, { fontSize: '20px', color: '#fbbf24', bold: true }).setOrigin(0.5);
+    const desc = createText(this, panelX, panelY - 50, task.description, { fontSize: '14px', color: '#94a3b8' }).setOrigin(0.5, 0);
+
+    let progressBar = null;
+    let progressFill = null;
+    let progress = 0;
+
+    if (task.type === 'progress') {
+      progressBar = this.add.rectangle(panelX, panelY, 300, 30, 0x334155);
+      progressFill = this.add.rectangle(panelX - 150, panelY, 0, 30, 0x4ade80).setOrigin(0, 0.5);
+
+      // Simular progresoAnimado
+      this.time.addEvent({
+        delay: 50,
+        repeat: task.duration / 50,
+        callback: () => {
+          progress += 50 / task.duration;
+          if (progressFill) progressFill.width = Math.min(300, 300 * progress);
+          if (progress >= 1) {
+            net.completeTask(task.id);
+            this.closeTaskPanel();
+          }
+        }
+      });
+    } else if (task.type === 'click') {
+      let clicks = 0;
+      const clickText = createText(this, panelX, panelY, `Clicks: 0/10`, { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
+      const clickBtn = createButton(this, panelX, panelY + 60, 'CLICK', () => {
+        clicks++;
+        clickText.label.setText(`Clicks: ${clicks}/10`);
+        if (clicks >= 10) {
+          net.completeTask(task.id);
+          this.closeTaskPanel();
+        }
+      }, { width: 150, height: 50, bgColor: 0x16a34a, fontSize: '16px' });
+
+      this.activeTaskPanel = {
+        taskId: task.id,
+        elements: [panel, title, desc, clickText, clickBtn.bg, clickBtn.label]
+      };
+      return;
+    } else if (task.type === 'sequence') {
+      let steps = 0;
+      const totalSteps = task.steps || 5;
+      const stepText = createText(this, panelX, panelY, `Paso: 0/${totalSteps}`, { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
+      const stepBtn = createButton(this, panelX, panelY + 60, 'SIGUIENTE', () => {
+        steps++;
+        stepText.label.setText(`Paso: ${steps}/${totalSteps}`);
+        if (steps >= totalSteps) {
+          net.completeTask(task.id);
+          this.closeTaskPanel();
+        }
+      }, { width: 200, height: 50, bgColor: 0x6366f1, fontSize: '16px' });
+
+      this.activeTaskPanel = {
+        taskId: task.id,
+        elements: [panel, title, desc, stepText, stepBtn.bg, stepBtn.label]
+      };
+      return;
+    }
+
+    const closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
+      this.closeTaskPanel();
+    }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
+
+    this.activeTaskPanel = {
+      taskId: task.id,
+      elements: [panel, title, desc, closeBtn.bg, closeBtn.label, progressBar, progressFill].filter(Boolean)
+    };
+  }
+
+  closeTaskPanel() {
+    if (!this.activeTaskPanel) return;
+    for (const el of this.activeTaskPanel.elements) {
+      if (el && el.destroy) el.destroy();
+    }
+    this.activeTaskPanel = null;
+  }
+
+  startSabotageMenu() {
+    // Menú simple: elegir zona para sabotear
+    const zones = ['recepcion', 'cubiculos', 'juntas', 'cocina', 'archivo', 'jefe_oficina', 'rh', 'servidor'];
+    const panelX = this.scale.width / 2;
+    const panelY = this.scale.height / 2;
+    createPanel(this, panelX, panelY, 350, 300, 0x7c2d12);
+    createText(this, panelX, panelY - 120, 'SABOTAJE', { fontSize: '20px', color: '#ef4444', bold: true }).setOrigin(0.5);
+
+    const buttons = [];
+    let btnY = panelY - 70;
+    for (const zid of zones) {
+      const btn = createButton(this, panelX, btnY, zid.toUpperCase(), () => {
+        net.sabotageZone(zid);
+        buttons.forEach((b) => { b.bg.destroy(); b.label.destroy(); });
+      }, { width: 200, height: 25, bgColor: 0x991b1b, bgHover: 0xdc2626, fontSize: '12px' });
+      buttons.push(btn);
+      btnY += 30;
+    }
+  }
+
+  showFloatingText(text, color = 0xffffff) {
+    const ft = this.add.text(this.scale.width / 2, 100, text, {
+      fontSize: '16px',
+      color: '#' + color.toString(16).padStart(6, '0'),
+      fontStyle: 'bold',
+      backgroundColor: '#00000088',
+      padding: { x: 10, y: 5 }
+    }).setOrigin(0.5);
+    this.tweens.add({
+      targets: ft,
+      y: 60,
+      alpha: 0,
+      duration: 2500,
+      onComplete: () => ft.destroy()
+    });
+  }
+}
