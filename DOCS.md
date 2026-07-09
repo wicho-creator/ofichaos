@@ -126,7 +126,7 @@ ofichaos/
 - **Start:** `node server/index.js`
 - **AutoDeploy:** Sí (cada push a `main` re-deploya)
 - **URL:** https://ofichaos.onrender.com
-- **Service ID:** `srv-d97sd2vaqgkc73f4dua0`
+- **Service ID:** ver `WichosBrain/APIS.md`
 
 ### Comando para deploy manual
 ```bash
@@ -217,10 +217,3 @@ PORT=3456 npm run dev  # puerto 3000 suele estar ocupado por Hermes
 10. **Reportar sabotaje no implementado:** El empleado tiene la habilidad pero no hay evento/botón
 
 ---
-
-## Credenciales (ver APIS.md)
-
-- **GitHub PAT:** `ghp_...` (wicho-creator, scope repo)
-- **Render API Key:** `rnd_...`
-- **Render Owner ID:** `tea-d97s9ct8nd3s73ec6glg`
-- **Render Service ID:** `srv-d97sd2vaqgkc73f4dua0`

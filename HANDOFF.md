@@ -21,10 +21,14 @@ git add -A && git commit -m "cambio" && git push origin main
 # Render auto-deploya en ~30 seg
 ```
 
-## Credenciales (en APIS.md)
-- GitHub PAT: wicho-creator
-- Render API: srv-d97sd2vaqgkc73f4dua0, owner tea-d97s9ct8nd3s73ec6glg
-- Service URL: https://ofichaos.onrender.com
+## Para el siguiente agente
+```bash
+cd /home/nas/AIWorkspace/games/ofichaos
+PORT=3456 npm run dev          # local
+git push origin main           # deploy automático a Render
+```
+
+Credenciales (GitHub PAT + Render API) están en `WichosBrain/APIS.md`.
 
 ## Limitaciones conocidas (prioridades para v2)
 1. Sin persistencia (salas se pierden al reiniciar servidor)
