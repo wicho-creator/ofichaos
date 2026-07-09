@@ -204,11 +204,13 @@ export class GameScene extends Phaser.Scene {
     const baseY = this.scale.height - 82;
     const makePad = (x, y, label, key) => {
       const btn = createButton(this, x, y, label, () => {}, { width: 38, height: 36, bgColor: 0x334155, bgHover: 0x475569, fontSize: '14px' });
-      btn.bg.on('pointerdown', () => { this.mobileInput[key] = true; });
-      btn.bg.on('pointerup', () => { this.mobileInput[key] = false; });
-      btn.bg.on('pointerout', () => { this.mobileInput[key] = false; });
+      btn.hit.on('pointerdown', () => { this.mobileInput[key] = true; });
+      btn.hit.on('pointerup', () => { this.mobileInput[key] = false; });
+      btn.hit.on('pointerout', () => { this.mobileInput[key] = false; });
       btn.bg.setScrollFactor(0);
       btn.label.setScrollFactor(0);
+      btn.hit.setScrollFactor(0);
+      btn.shadow.setScrollFactor(0);
     };
     makePad(baseX, baseY - 38, '↑', 'up');
     makePad(baseX, baseY + 38, '↓', 'down');
