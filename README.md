@@ -1,7 +1,12 @@
 # 🎮 OfiChaos
 ### El caos de la oficina — Juego multijugador online
 
+> **🚀 Jugar ahora:** https://ofichaos.onrender.com
+> **📦 Código:** https://github.com/wicho-creator/ofichaos
+
 OfiChaos es un juego tipo *Among Us* ambientado en una oficina tóxica y cómica. Los jugadores reciben roles secretos (Empleado, Jefe, Lamebotas), completan tareas, sabotean, convocan reuniones y votan para ganar.
+
+**Documentación técnica completa:** ver `DOCS.md`
 
 ---
 
