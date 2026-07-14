@@ -1,0 +1,753 @@
+diff --git a/client/src/systems/ui.js b/client/src/systems/ui.js
+--- a/client/src/systems/ui.js
++++ b/client/src/systems/ui.js
+@@ -3,48 +3,70 @@
+ export function createButton(scene, x, y, text, callback, style = {}) {
+-  const width = style.width || 200;
+-  const height = style.height || 50;
++  let width = style.width || 200;
++  let height = style.height || 50;
+   const bgColor = style.bgColor || 0x4c1d95;
+   const bgHover = style.bgHover || 0x6d28d9;
+   const textColor = style.textColor || '#ffffff';
+   const fontSize = style.fontSize || '18px';
+   const radius = style.radius || 16;
+ 
+   const shadow = scene.add.graphics();
+-  shadow.fillStyle(0x000000, 0.28);
+-  shadow.fillRoundedRect(x - width / 2 + 4, y - height / 2 + 6, width, height, radius);
+-
+   const bg = scene.add.graphics();
+-  const draw = (color, lift = 0) => {
+-    bg.clear();
+-    bg.fillStyle(color, 1);
+-    bg.fillRoundedRect(x - width / 2, y - height / 2 - lift, width, height, radius);
+-    bg.lineStyle(3, 0xffffff, 0.72);
+-    bg.strokeRoundedRect(x - width / 2, y - height / 2 - lift, width, height, radius);
+-    bg.lineStyle(2, 0x000000, 0.22);
+-    bg.strokeRoundedRect(x - width / 2 + 4, y - height / 2 + 4 - lift, width - 8, height - 8, Math.max(8, radius - 4));
+-  };
+-  draw(bgColor);
+-
+-  const hit = scene.add.zone(x, y, width, height).setOrigin(0.5).setInteractive({ useHandCursor: true });
+-  const label = scene.add.text(x, y - 1, text, {
++  const hit = scene.add.zone(x, y, width, height).setOrigin(0.5).setInteractive({ useHandCursor: true });
++  const label = scene.add.text(x, y - 1, text, {
+     fontSize,
+     color: textColor,
+     fontStyle: 'bold',
+     align: 'center'
+   }).setOrigin(0.5);
+ 
+-  hit.on('pointerover', () => { draw(bgHover, 2); label.y = y - 3; });
+-  hit.on('pointerout', () => { draw(bgColor, 0); label.y = y - 1; });
++  const drawShadow = (w, h) => {
++    shadow.clear();
++    shadow.fillStyle(0x000000, 0.28);
++    shadow.fillRoundedRect(-w / 2 + 4, -h / 2 + 6, w, h, radius);
++  };
++
++  const drawBg = (color, w, h, lift = 0) => {
++    bg.clear();
++    bg.fillStyle(color, 1);
++    bg.fillRoundedRect(-w / 2, -h / 2 - lift, w, h, radius);
++    bg.lineStyle(3, 0xffffff, 0.72);
++    bg.strokeRoundedRect(-w / 2, -h / 2 - lift, w, h, radius);
++    bg.lineStyle(2, 0x000000, 0.22);
++    bg.strokeRoundedRect(-w / 2 + 4, -h / 2 + 4 - lift, w - 8, h - 8, Math.max(8, radius - 4));
++  };
++
++  const setPositionAndSize = (px, py, pw, ph) => {
++    width = pw !== undefined ? pw : width;
++    height = ph !== undefined ? ph : height;
++
++    shadow.x = px;
++    shadow.y = py;
++    drawShadow(width, height);
++
++    bg.x = px;
++    bg.y = py;
++    drawBg(bgColor, width, height, 0);
++
++    hit.setPosition(px, py);
++    hit.setSize(width, height);
++
++    label.setPosition(px, py - 1);
++  };
++
++  setPositionAndSize(x, y, width, height);
++
++  hit.on('pointerover', () => { drawBg(bgHover, width, height, 2); label.y = hit.y - 3; });
++  hit.on('pointerout', () => { drawBg(bgColor, width, height, 0); label.y = hit.y - 1; });
+   hit.on('pointerdown', callback);
+ 
+   const destroyGraphics = bg.destroy.bind(bg);
+   bg.destroy = () => {
+     if (hit.active) hit.destroy();
+     if (shadow.active) shadow.destroy();
+     destroyGraphics();
+   };
+ 
+-  return { bg, label, hit, shadow };
++  return { bg, label, hit, shadow, setPositionAndSize };
+ }
+ 
+ export function createPanel(scene, x, y, w, h, bgColor = 0x1e293b, style = {}) {
+   const radius = style.radius || 22;
+   const panel = scene.add.graphics();
+-  panel.fillStyle(0x000000, 0.22);
+-  panel.fillRoundedRect(x - w / 2 + 6, y - h / 2 + 8, w, h, radius);
+-  panel.fillStyle(bgColor, style.alpha ?? 0.92);
+-  panel.fillRoundedRect(x - w / 2, y - h / 2, w, h, radius);
+-  panel.lineStyle(style.strokeWidth || 3, style.strokeColor || 0xfbbf24, style.strokeAlpha ?? 0.38);
+-  panel.strokeRoundedRect(x - w / 2, y - h / 2, w, h, radius);
+-  panel.lineStyle(2, 0xffffff, 0.12);
+-  panel.strokeRoundedRect(x - w / 2 + 6, y - h / 2 + 6, w - 12, h - 12, Math.max(10, radius - 6));
++
++  panel.drawPanel = (px, py, pw, ph) => {
++    panel.clear();
++    panel.x = px;
++    panel.y = py;
++    panel.fillStyle(0x000000, 0.22);
++    panel.fillRoundedRect(-pw / 2 + 6, -ph / 2 + 8, pw, ph, radius);
++    panel.fillStyle(bgColor, style.alpha ?? 0.92);
++    panel.fillRoundedRect(-pw / 2, -ph / 2, pw, ph, radius);
++    panel.lineStyle(style.strokeWidth || 3, style.strokeColor || 0xfbbf24, style.strokeAlpha ?? 0.38);
++    panel.strokeRoundedRect(-pw / 2, -ph / 2, pw, ph, radius);
++    panel.lineStyle(2, 0xffffff, 0.12);
++    panel.strokeRoundedRect(-pw / 2 + 6, -ph / 2 + 6, pw - 12, ph - 12, Math.max(10, radius - 6));
++  };
++
++  panel.drawPanel(x, y, w, h);
+   return panel;
+ }
+
+diff --git a/client/src/scenes/GameScene.js b/client/src/scenes/GameScene.js
+--- a/client/src/scenes/GameScene.js
++++ b/client/src/scenes/GameScene.js
+@@ -53,8 +53,13 @@
+ 
+     // HUD fijo en pantalla aunque la cámara siga al jugador
+     const worldChildCount = this.children.list.length;
+     this.createHUD();
+     this.children.list.slice(worldChildCount).forEach((child) => child.setScrollFactor?.(0));
++
++    // Responsividad al redimensionar
++    this.scale.on('resize', this.resize, this);
++    this.events.once('shutdown', () => {
++      this.scale.off('resize', this.resize, this);
++    });
+ 
+     // Listeners socket
+@@ -138,59 +143,184 @@
+   createHUD() {
+-    const w = this.scale.width;
+-    const h = this.scale.height;
+-    const compact = h < 700;
+-
+-    createPanel(this, w / 2, compact ? 58 : 52, Math.min(690, w - 120), compact ? 56 : 68, 0x0b1220, { strokeColor: 0xfbbf24, strokeAlpha: 0.28, radius: 18 });
+-    this.timerText = this.add.text(w / 2 - 128, compact ? 51 : 46, '⏱ 8:00', {
+-      fontSize: compact ? '20px' : '22px', color: '#fbbf24', fontStyle: 'bold'
+-    }).setOrigin(0.5, 0.5);
+-    this.taskPercentText = this.add.text(w / 2 + 84, compact ? 51 : 46, '📋 Tareas 0%', {
+-      fontSize: compact ? '16px' : '17px', color: '#4ade80', fontStyle: 'bold'
+-    }).setOrigin(0.5, 0.5);
+-    this.add.text(w / 2, compact ? 68 : 68, 'WASD/Flechas · E o botón azul para trabajar', {
+-      fontSize: '10px', color: '#94a3b8'
+-    }).setOrigin(0.5);
+-
+-    const roleColors = { jefe: '#ef4444', lamebotas: '#facc15', empleado: '#4ade80' };
+-    const roleName = { jefe: 'JEFE', lamebotas: 'LAMEBOTAS', empleado: 'EMPLEADO' };
+-    const roleW = compact ? 270 : 320;
+-    const roleH = compact ? 88 : 104;
+-    const roleX = compact ? 205 : 210;
+-    const roleY = compact ? h - 126 : h - 154;
+-    createPanel(this, roleX, roleY, roleW, roleH, 0x111827, { strokeColor: 0x38bdf8, strokeAlpha: 0.24, radius: 20 });
+-    this.roleDisplay = this.add.text(roleX, roleY - (compact ? 22 : 28), `ROL: ${roleName[this.myRole] || '?'}`, {
+-      fontSize: compact ? '15px' : '17px', color: roleColors[this.myRole] || '#94a3b8', fontStyle: 'bold'
+-    }).setOrigin(0.5);
+-    this.add.text(roleX, roleY + (compact ? -1 : -3), 'Objetivo secundario', { fontSize: '10px', color: '#94a3b8' }).setOrigin(0.5);
+-    this.add.text(roleX, roleY + (compact ? 18 : 21), this.roleText || 'Sobrevive al caos de la oficina', {
+-      fontSize: compact ? '10px' : '11px', color: '#f8fafc', align: 'center', wordWrap: { width: compact ? 214 : 260 }
+-    }).setOrigin(0.5);
+-
+-    const statusW = compact ? 294 : 342;
+-    const statusH = compact ? 108 : 130;
+-    const statusX = compact ? w - 205 : w - 215;
+-    const statusY = compact ? h - 130 : h - 160;
+-    createPanel(this, statusX, statusY, statusW, statusH, 0x111827, { strokeColor: 0x22c55e, strokeAlpha: 0.22, radius: 20 });
+-    this.add.text(statusX - (compact ? 108 : 126), statusY - (compact ? 34 : 42), '😊 Moral del equipo', { fontSize: compact ? '12px' : '13px', color: '#cbd5e1', fontStyle: 'bold' });
+-    this.moraleBar = this.add.rectangle(statusX + (compact ? 8 : 18), statusY - (compact ? 26 : 34), compact ? 146 : 168, 14, 0x334155).setOrigin(0.5);
+-    this.moraleFill = this.add.rectangle(statusX - (compact ? 65 : 66), statusY - (compact ? 26 : 34), compact ? 146 : 168, 14, 0x4ade80).setOrigin(0, 0.5);
+-    this.add.text(statusX - (compact ? 108 : 126), statusY - (compact ? 7 : 12), 'Tareas activas', { fontSize: '11px', color: '#94a3b8', fontStyle: 'bold' });
+-    this.tasksList = this.add.text(statusX - (compact ? 108 : 126), statusY + (compact ? 11 : 8), '', {
+-      fontSize: compact ? '10px' : '11px', color: '#e2e8f0', lineSpacing: 2, wordWrap: { width: compact ? 220 : 268 }
+-    }).setOrigin(0, 0);
+-
+-    const actionY = compact ? h - 76 : h - 82;
+-    createPanel(this, w / 2, actionY, compact ? 228 : 280, compact ? 72 : 94, 0x0b1220, { strokeColor: 0x64748b, strokeAlpha: 0.25, radius: 18 });
+-    const btnY = compact ? actionY - 7 : actionY - 8;
+-    createButton(this, w / 2 - 58, btnY, '📋', () => net.callMeeting(), { width: compact ? 44 : 50, height: compact ? 42 : 48, bgColor: 0xdc2626, bgHover: 0xef4444, fontSize: '18px', radius: 14 });
+-    createButton(this, w / 2, btnY, '🛠', () => this.tryOpenNearbyTask(), { width: compact ? 44 : 50, height: compact ? 42 : 48, bgColor: 0x2563eb, bgHover: 0x3b82f6, fontSize: '18px', radius: 14 });
+-    if (this.myRole === 'empleado') {
+-      createButton(this, w / 2 + 58, btnY, '🚨', () => net.reportSabotage(), { width: compact ? 44 : 50, height: compact ? 42 : 48, bgColor: 0xf97316, bgHover: 0xfb923c, fontSize: '18px', radius: 14 });
+-    }
+-    if (this.myRole === 'jefe' || this.myRole === 'lamebotas') {
+-      createButton(this, w / 2 + 58, btnY, '💀', () => this.startSabotageMenu(), { width: compact ? 44 : 50, height: compact ? 42 : 48, bgColor: 0x7c2d12, bgHover: 0xdc2626, fontSize: '18px', radius: 14 });
+-    }
+-    this.cooldownText = this.add.text(w / 2, actionY + (compact ? 14 : 22), '', {
+-      fontSize: '10px', color: '#bbf7d0', align: 'center', wordWrap: { width: compact ? 206 : 190 }
+-    }).setOrigin(0.5, 0.5);
+-
+-    this.createMobileControls();
++    this.hud = this.hud || {};
++
++    // 1. Header Panel y Textos
++    this.hud.headerPanel = createPanel(this, 0, 0, 100, 100, 0x0b1220, { strokeColor: 0xfbbf24, strokeAlpha: 0.28, radius: 18 });
++    this.hud.timerText = this.add.text(0, 0, '⏱ 8:00', { fontStyle: 'bold', color: '#fbbf24' }).setOrigin(0.5, 0.5);
++    this.hud.taskPercentText = this.add.text(0, 0, '📋 Tareas 0%', { fontStyle: 'bold', color: '#4ade80' }).setOrigin(0.5, 0.5);
++    this.hud.helpText = this.add.text(0, 0, 'WASD/Flechas · E o botón azul para trabajar', { fontSize: '10px', color: '#94a3b8' }).setOrigin(0.5);
++
++    this.timerText = this.hud.timerText;
++    this.taskPercentText = this.hud.taskPercentText;
++
++    // 2. Role Panel
++    const roleColors = { jefe: '#ef4444', lamebotas: '#facc15', empleado: '#4ade80' };
++    const roleName = { jefe: 'JEFE', lamebotas: 'LAMEBOTAS', empleado: 'EMPLEADO' };
++    this.hud.rolePanel = createPanel(this, 0, 0, 100, 100, 0x111827, { strokeColor: 0x38bdf8, strokeAlpha: 0.24, radius: 20 });
++    this.hud.roleDisplay = this.add.text(0, 0, `ROL: ${roleName[this.myRole] || '?'}`, {
++      color: roleColors[this.myRole] || '#94a3b8', fontStyle: 'bold'
++    }).setOrigin(0.5);
++    this.hud.roleObjectiveLabel = this.add.text(0, 0, 'Objetivo secundario', { fontSize: '10px', color: '#94a3b8' }).setOrigin(0.5);
++    this.hud.roleDescription = this.add.text(0, 0, this.roleText || 'Sobrevive al caos de la oficina', {
++      color: '#f8fafc', align: 'center'
++    }).setOrigin(0.5);
++
++    this.roleDisplay = this.hud.roleDisplay;
++
++    // 3. Status/Moral Panel
++    this.hud.statusPanel = createPanel(this, 0, 0, 100, 100, 0x111827, { strokeColor: 0x22c55e, strokeAlpha: 0.22, radius: 20 });
++    this.hud.moraleLabel = this.add.text(0, 0, '😊 Moral del equipo', { color: '#cbd5e1', fontStyle: 'bold' });
++    this.hud.moraleBar = this.add.rectangle(0, 0, 100, 14, 0x334155).setOrigin(0.5);
++    this.hud.moraleFill = this.add.rectangle(0, 0, 100, 14, 0x4ade80).setOrigin(0, 0.5);
++    this.hud.tasksLabel = this.add.text(0, 0, 'Tareas activas', { color: '#94a3b8', fontStyle: 'bold' });
++    this.hud.tasksList = this.add.text(0, 0, '', { color: '#e2e8f0', lineSpacing: 2 }).setOrigin(0, 0);
++
++    this.moraleBar = this.hud.moraleBar;
++    this.moraleFill = this.hud.moraleFill;
++    this.tasksList = this.hud.tasksList;
++
++    // 4. Action Panel & Buttons
++    this.hud.actionPanel = createPanel(this, 0, 0, 100, 100, 0x0b1220, { strokeColor: 0x64748b, strokeAlpha: 0.25, radius: 18 });
++    this.hud.btnMeeting = createButton(this, 0, 0, '📋', () => net.callMeeting());
++    this.hud.btnInteract = createButton(this, 0, 0, '🛠', () => this.tryOpenNearbyTask());
++
++    if (this.myRole === 'empleado') {
++      this.hud.btnSabotageOrReport = createButton(this, 0, 0, '🚨', () => net.reportSabotage());
++    } else if (this.myRole === 'jefe' || this.myRole === 'lamebotas') {
++      this.hud.btnSabotageOrReport = createButton(this, 0, 0, '💀', () => this.startSabotageMenu());
++    }
++    this.hud.cooldownText = this.add.text(0, 0, '', { fontSize: '10px', color: '#bbf7d0', align: 'center' }).setOrigin(0.5, 0.5);
++
++    this.cooldownText = this.hud.cooldownText;
++    this.hud.mobileControls = [];
++
++    // Asegurar ScrollFactor 0 para evitar que el HUD se desplace con el mapa
++    Object.values(this.hud).forEach((el) => {
++      if (!el) return;
++      if (el.setScrollFactor) {
++        el.setScrollFactor(0);
++      } else if (el.bg) {
++        el.bg.setScrollFactor(0);
++        el.label.setScrollFactor(0);
++        el.hit.setScrollFactor(0);
++        el.shadow.setScrollFactor(0);
++      }
++    });
++
++    // Posicionar todo dinámicamente según tamaño actual
++    this.repositionHUD(this.scale.width, this.scale.height);
+   }
+ 
+-  createMobileControls() {
+-    if (this.scale.width > 900) return;
+-    const baseX = 82;
+-    const baseY = this.scale.height - 82;
+-    const makePad = (x, y, label, key) => {
+-      const btn = createButton(this, x, y, label, () => {}, { width: 38, height: 36, bgColor: 0x334155, bgHover: 0x475569, fontSize: '14px' });
+-      btn.hit.on('pointerdown', () => { this.mobileInput[key] = true; });
+-      btn.hit.on('pointerup', () => { this.mobileInput[key] = false; });
+-      btn.hit.on('pointerout', () => { this.mobileInput[key] = false; });
+-      btn.bg.setScrollFactor(0);
+-      btn.label.setScrollFactor(0);
+-      btn.hit.setScrollFactor(0);
+-      btn.shadow.setScrollFactor(0);
+-    };
+-    makePad(baseX, baseY - 38, '↑', 'up');
+-    makePad(baseX, baseY + 38, '↓', 'down');
+-    makePad(baseX - 40, baseY, '←', 'left');
+-    makePad(baseX + 40, baseY, '→', 'right');
++  resize(gameSize) {
++    const w = gameSize.width;
++    const h = gameSize.height;
++
++    // Ajustar zoom de cámara principal según altura
++    this.cameras.main.setZoom(h < 700 ? 0.9 : 1.15);
++
++    // Reposicionar HUD principal
++    if (this.hud && this.hud.headerPanel) {
++      this.repositionHUD(w, h);
++    }
++
++    // Reposicionar paneles abiertos
++    this.repositionActivePanels(w, h);
+   }
++
++  repositionHUD(w, h) {
++    const compact = h < 700;
++    const narrow = w < 600;
++
++    // 1. Header Panel
++    const headerW = narrow ? w - 20 : Math.min(690, w - 120);
++    const headerH = compact ? 56 : 68;
++    const headerX = w / 2;
++    const headerY = compact ? 38 : 46;
++
++    this.hud.headerPanel.drawPanel(headerX, headerY, headerW, headerH);
++    this.hud.timerText.setPosition(headerX - (narrow ? 64 : 128), headerY - (compact ? 7 : 6));
++    this.hud.timerText.setFontSize(compact ? '18px' : '22px');
++    this.hud.taskPercentText.setPosition(headerX + (narrow ? 64 : 84), headerY - (compact ? 7 : 6));
++    this.hud.taskPercentText.setFontSize(compact ? '14px' : '17px');
++
++    this.hud.helpText.setPosition(headerX, headerY + (compact ? 12 : 16));
++    this.hud.helpText.setVisible(!narrow);
++
++    // 2. Role Panel
++    let roleX, roleY, roleW, roleH;
++    if (narrow) {
++      roleW = 145;
++      roleH = 68;
++      roleX = 10 + roleW / 2;
++      roleY = headerY + headerH / 2 + 10 + roleH / 2;
++    } else {
++      roleW = compact ? 270 : 320;
++      roleH = compact ? 88 : 104;
++      roleX = compact ? 205 : 210;
++      roleY = compact ? h - 126 : h - 154;
++    }
++
++    this.hud.rolePanel.drawPanel(roleX, roleY, roleW, roleH);
++    this.hud.roleDisplay.setPosition(roleX, roleY - (narrow ? 16 : compact ? 22 : 28));
++    this.hud.roleDisplay.setFontSize(narrow ? '12px' : compact ? '15px' : '17px');
++    this.hud.roleObjectiveLabel.setPosition(roleX, roleY + (narrow ? 2 : compact ? -1 : -3));
++    this.hud.roleObjectiveLabel.setVisible(!narrow);
++    this.hud.roleDescription.setPosition(roleX, roleY + (narrow ? 10 : compact ? 18 : 21));
++    this.hud.roleDescription.setFontSize(narrow ? '9px' : compact ? '10px' : '11px');
++    this.hud.roleDescription.setStyle({ wordWrap: { width: roleW - (narrow ? 16 : compact ? 56 : 60) } });
++
++    // 3. Status/Moral Panel
++    let statusX, statusY, statusW, statusH;
++    if (narrow) {
++      statusW = w - roleW - 30;
++      statusH = 76;
++      statusX = w - 10 - statusW / 2;
++      statusY = headerY + headerH / 2 + 10 + statusH / 2;
++    } else {
++      statusW = compact ? 294 : 342;
++      statusH = compact ? 108 : 130;
++      statusX = compact ? w - 205 : w - 215;
++      statusY = compact ? h - 130 : h - 160;
++    }
++
++    this.hud.statusPanel.drawPanel(statusX, statusY, statusW, statusH);
++
++    const moraleLabelX = statusX - statusW / 2 + 16;
++    const moraleLabelY = statusY - statusH / 2 + 12;
++    this.hud.moraleLabel.setPosition(moraleLabelX, moraleLabelY);
++    this.hud.moraleLabel.setFontSize(narrow ? '10px' : compact ? '12px' : '13px');
++
++    const moraleBarW = narrow ? statusW - 120 : compact ? 146 : 168;
++    const moraleBarX = statusX + statusW / 2 - moraleBarW / 2 - 16;
++    const moraleBarY = moraleLabelY + (narrow ? 6 : 4);
++    this.hud.moraleBar.setPosition(moraleBarX, moraleBarY);
++    this.hud.moraleBar.setSize(moraleBarW, 14);
++    this.hud.moraleFill.setPosition(moraleBarX - moraleBarW / 2, moraleBarY);
++    this.hud.moraleFill.height = 14;
++
++    const tasksLabelX = moraleLabelX;
++    const tasksLabelY = moraleLabelY + (narrow ? 18 : compact ? 27 : 30);
++    this.hud.tasksLabel.setPosition(tasksLabelX, tasksLabelY);
++    this.hud.tasksLabel.setFontSize(narrow ? '9px' : '11px');
++    this.hud.tasksLabel.setVisible(!narrow);
++
++    const tasksListX = moraleLabelX;
++    const tasksListY = narrow ? tasksLabelY : tasksLabelY + 18;
++    this.hud.tasksList.setPosition(tasksListX, tasksListY);
++    this.hud.tasksList.setFontSize(narrow ? '9px' : compact ? '10px' : '11px');
++    this.hud.tasksList.setStyle({ wordWrap: { width: statusW - 32 } });
++
++    // 4. Action Panel & Buttons
++    let actionX, actionY, actionW, actionH, btnY;
++    if (narrow) {
++      actionW = 120;
++      actionH = 120;
++      actionX = w - 10 - actionW / 2;
++      actionY = h - 10 - actionH / 2;
++
++      this.hud.actionPanel.drawPanel(actionX, actionY, actionW, actionH);
++      this.hud.actionPanel.setVisible(false);
++
++      const mainBtnX = w - 50;
++      const mainBtnY = h - 50;
++      this.hud.btnInteract.setPositionAndSize(mainBtnX, mainBtnY, 56, 56);
++      this.hud.btnInteract.label.setFontSize('22px');
++
++      this.hud.btnMeeting.setPositionAndSize(mainBtnX - 58, mainBtnY, 40, 40);
++      this.hud.btnMeeting.label.setFontSize('16px');
++
++      if (this.hud.btnSabotageOrReport) {
++        this.hud.btnSabotageOrReport.setPositionAndSize(mainBtnX, mainBtnY - 58, 40, 40);
++        this.hud.btnSabotageOrReport.label.setFontSize('16px');
++      }
++
++      this.hud.cooldownText.setPosition(mainBtnX - 60, mainBtnY - 60);
++      this.hud.cooldownText.setFontSize('9px');
++    } else {
++      actionW = compact ? 228 : 280;
++      actionH = compact ? 72 : 94;
++      actionX = w / 2;
++      actionY = compact ? h - 76 : h - 82;
++      btnY = compact ? actionY - 7 : actionY - 8;
++
++      this.hud.actionPanel.drawPanel(actionX, actionY, actionW, actionH);
++      this.hud.actionPanel.setVisible(true);
++
++      this.hud.btnMeeting.setPositionAndSize(actionX - 58, btnY, compact ? 44 : 50, compact ? 42 : 48);
++      this.hud.btnMeeting.label.setFontSize('18px');
++
++      this.hud.btnInteract.setPositionAndSize(actionX, btnY, compact ? 44 : 50, compact ? 42 : 48);
++      this.hud.btnInteract.label.setFontSize('18px');
++
++      if (this.hud.btnSabotageOrReport) {
++        this.hud.btnSabotageOrReport.setPositionAndSize(actionX + 58, btnY, compact ? 44 : 50, compact ? 42 : 48);
++        this.hud.btnSabotageOrReport.label.setFontSize('18px');
++      }
++
++      this.hud.cooldownText.setPosition(actionX, actionY + (compact ? 14 : 22));
++      this.hud.cooldownText.setFontSize('10px');
++    }
++
++    // 5. Mobile Pad Controls (D-pad)
++    this.hud.mobileControls.forEach((btn) => btn.bg?.destroy?.());
++    this.hud.mobileControls = [];
++
++    if (w <= 900) {
++      const baseX = 70;
++      const baseY = h - 70;
++
++      const makePad = (px, py, label, key) => {
++        const btn = createButton(this, px, py, label, () => {}, {
++          width: 34, height: 34, bgColor: 0x334155, bgHover: 0x475569, fontSize: '12px', radius: 10
++        });
++        btn.hit.on('pointerdown', () => { this.mobileInput[key] = true; });
++        btn.hit.on('pointerup', () => { this.mobileInput[key] = false; });
++        btn.hit.on('pointerout', () => { this.mobileInput[key] = false; });
++
++        btn.bg.setScrollFactor(0);
++        btn.label.setScrollFactor(0);
++        btn.hit.setScrollFactor(0);
++        btn.shadow.setScrollFactor(0);
++
++        this.hud.mobileControls.push(btn);
++      };
++
++      makePad(baseX, baseY - 32, '↑', 'up');
++      makePad(baseX, baseY + 32, '↓', 'down');
++      makePad(baseX - 34, baseY, '←', 'left');
++      makePad(baseX + 34, baseY, '→', 'right');
++    }
++
++    this.updateHUD(this.gameState);
++  }
++
++  repositionActivePanels(w, h) {
++    // Redimensionar Sabotaje si está abierto
++    if (this.activeSabotageMenu) {
++      this.closeSabotageMenu();
++      this.startSabotageMenu();
++    }
++
++    // Redimensionar Tarea activa si está abierta
++    if (this.activeTaskPanel) {
++      const panelX = w / 2;
++      const panelY = h / 2;
++      const task = this.activeTaskPanel.task;
++
++      const panel = this.activeTaskPanel.elements[0];
++      const title = this.activeTaskPanel.elements[1];
++      const desc = this.activeTaskPanel.elements[2];
++
++      const panelW = w < 400 ? w - 30 : 350;
++      if (panel && panel.drawPanel) panel.drawPanel(panelX, panelY, panelW, 250);
++      if (title) title.setPosition(panelX, panelY - 90);
++      if (desc) {
++        desc.setPosition(panelX, panelY - 50);
++        desc.setStyle({ wordWrap: { width: panelW - 40 } });
++      }
++
++      if (task.type === 'progress') {
++        const progressBar = this.activeTaskPanel.progressBar;
++        const progressFill = this.activeTaskPanel.progressFill;
++        const closeBtn = this.activeTaskPanel.closeBtn;
++
++        const barW = panelW - 50;
++        if (progressBar) {
++          progressBar.setPosition(panelX, panelY);
++          progressBar.setSize(barW, 30);
++        }
++        if (progressFill) {
++          progressFill.setPosition(panelX - barW / 2, panelY);
++          // El progreso actual se ajustará en el siguiente loop/animación
++        }
++        if (closeBtn && closeBtn.setPositionAndSize) {
++          closeBtn.setPositionAndSize(panelX, panelY + 100, 100, 30);
++        }
++      } else if (task.type === 'click') {
++        const clickText = this.activeTaskPanel.clickText;
++        const clickBtn = this.activeTaskPanel.clickBtn;
++
++        if (clickText) clickText.setPosition(panelX, panelY);
++        if (clickBtn && clickBtn.setPositionAndSize) {
++          clickBtn.setPositionAndSize(panelX, panelY + 60, 150, 50);
++        }
++      } else if (task.type === 'sequence') {
++        const stepText = this.activeTaskPanel.stepText;
++        const stepBtn = this.activeTaskPanel.stepBtn;
++
++        if (stepText) stepText.setPosition(panelX, panelY);
++        if (stepBtn && stepBtn.setPositionAndSize) {
++          stepBtn.setPositionAndSize(panelX, panelY + 60, 200, 50);
++        }
++      }
++    }
+   }
+ 
+@@ -370,3 +500,4 @@
+-      this.moraleFill.width = Math.max(0, 230 * (moralePct / 100));
++      const barWidth = this.moraleBar.width;
++      this.moraleFill.width = Math.max(0, barWidth * (moralePct / 100));
+       const moraleColor = moralePct > 60 ? 0x4ade80 : moralePct > 30 ? 0xfbbf24 : 0xef4444;
+@@ -495,15 +626,17 @@
+   openTaskPanel(task) {
+     // Verificar si ya está completada
+     if (this.gameState?.tasks) {
+       const ts = this.gameState.tasks.find((t) => t.id === task.id);
+       if (ts?.blocked) {
+         this.showFloatingText('Esta tarea está bloqueada por el lamebotas', 0xef4444);
+         return;
+       }
+       if (ts?.completed) {
+         this.showFloatingText('Esta tarea ya está completada', 0xfbbf24);
+         return;
+       }
+     }
+ 
+     if (this.activeTaskPanel) this.closeTaskPanel();
+ 
+     const panelX = this.scale.width / 2;
+     const panelY = this.scale.height / 2;
++    const panelW = this.scale.width < 400 ? this.scale.width - 30 : 350;
+ 
+-    const panel = createPanel(this, panelX, panelY, 350, 250, 0x16213e);
++    const panel = createPanel(this, panelX, panelY, panelW, 250, 0x16213e);
+     const title = createText(this, panelX, panelY - 90, task.name, { fontSize: '20px', color: '#fbbf24', bold: true }).setOrigin(0.5);
+-    const desc = createText(this, panelX, panelY - 50, task.description, { fontSize: '14px', color: '#94a3b8' }).setOrigin(0.5, 0);
++    const desc = createText(this, panelX, panelY - 50, task.description, { fontSize: '14px', color: '#94a3b8', wrap: panelW - 40 }).setOrigin(0.5, 0);
+ 
+     let progressBar = null;
+     let progressFill = null;
++    let closeBtn = null;
++    let clickText = null;
++    let clickBtn = null;
++    let stepText = null;
++    let stepBtn = null;
+     let progress = 0;
+ 
+     if (task.type === 'progress') {
+-      progressBar = this.add.rectangle(panelX, panelY, 300, 30, 0x334155);
+-      progressFill = this.add.rectangle(panelX - 150, panelY, 0, 30, 0x4ade80).setOrigin(0, 0.5);
++      const barW = panelW - 50;
++      progressBar = this.add.rectangle(panelX, panelY, barW, 30, 0x334155);
++      progressFill = this.add.rectangle(panelX - barW / 2, panelY, 0, 30, 0x4ade80).setOrigin(0, 0.5);
+ 
+       // Simular progresoAnimado
+       this.time.addEvent({
+         delay: 50,
+         repeat: task.duration / 50,
+         callback: () => {
+           progress += 50 / task.duration;
+-          if (progressFill) progressFill.width = Math.min(300, 300 * progress);
++          if (progressFill) progressFill.width = Math.min(barW, barW * progress);
+           if (progress >= 1) {
+             net.completeTask(task.id);
+             this.closeTaskPanel();
+           }
+         }
+       });
++
++      closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
++        this.closeTaskPanel();
++      }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
+     } else if (task.type === 'click') {
+       let clicks = 0;
+-      const clickText = createText(this, panelX, panelY, `Clicks: 0/10`, { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
+-      const clickBtn = createButton(this, panelX, panelY + 60, 'CLICK', () => {
++      clickText = createText(this, panelX, panelY, `Clicks: 0/10`, { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
++      clickBtn = createButton(this, panelX, panelY + 60, 'CLICK', () => {
+         clicks++;
+         clickText.label.setText(`Clicks: ${clicks}/10`);
+         if (clicks >= 10) {
+           net.completeTask(task.id);
+           this.closeTaskPanel();
+         }
+       }, { width: 150, height: 50, bgColor: 0x16a34a, fontSize: '16px' });
+-
+-      this.activeTaskPanel = {
+-        taskId: task.id,
+-        elements: [panel, title, desc, clickText, clickBtn.bg, clickBtn.label]
+-      };
+-      this.activeTaskPanel.elements.forEach((el) => el.setScrollFactor?.(0));
+-      return;
+     } else if (task.type === 'sequence') {
+       let steps = 0;
+       const totalSteps = task.steps || 5;
+-      const stepText = createText(this, panelX, panelY, `Paso: 0/${totalSteps}`, { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
+-      const stepBtn = createButton(this, panelX, panelY + 60, 'SIGUIENTE', () => {
++      stepText = createText(this, panelX, panelY, `Paso: 0/${totalSteps}`, { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
++      stepBtn = createButton(this, panelX, panelY + 60, 'SIGUIENTE', () => {
+         steps++;
+         stepText.label.setText(`Paso: ${steps}/${totalSteps}`);
+         if (steps >= totalSteps) {
+           net.completeTask(task.id);
+           this.closeTaskPanel();
+         }
+       }, { width: 200, height: 50, bgColor: 0x6366f1, fontSize: '16px' });
+-
+-      this.activeTaskPanel = {
+-        taskId: task.id,
+-        elements: [panel, title, desc, stepText, stepBtn.bg, stepBtn.label]
+-      };
+-      this.activeTaskPanel.elements.forEach((el) => el.setScrollFactor?.(0));
+-      return;
+-    }
+-
+-    const closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
+-      this.closeTaskPanel();
+-    }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
+-
+-    this.activeTaskPanel = {
+-      taskId: task.id,
+-      elements: [panel, title, desc, closeBtn.bg, closeBtn.label, progressBar, progressFill].filter(Boolean)
+-    };
+-    this.activeTaskPanel.elements.forEach((el) => el.setScrollFactor?.(0));
++    }
++
++    this.activeTaskPanel = {
++      taskId: task.id,
++      task: task,
++      elements: [
++        panel, title, desc, 
++        closeBtn?.bg, closeBtn?.label, 
++        progressBar, progressFill,
++        clickText, clickBtn?.bg, clickBtn?.label,
++        stepText, stepBtn?.bg, stepBtn?.label
++      ].filter(Boolean),
++      progressBar,
++      progressFill,
++      closeBtn,
++      clickText,
++      clickBtn,
++      stepText,
++      stepBtn
++    };
++
++    this.activeTaskPanel.elements.forEach((el) => el.setScrollFactor?.(0));
+   }
+ 
+   closeTaskPanel() {
+     if (!this.activeTaskPanel) return;
+     for (const el of this.activeTaskPanel.elements) {
+       if (el && el.destroy) el.destroy();
+     }
+     this.activeTaskPanel = null;
+   }
+ 
+@@ -597,12 +732,15 @@
+   startSabotageMenu() {
++    if (this.activeSabotageMenu) this.closeSabotageMenu();
++
+     const panelX = this.scale.width / 2;
+     const panelY = this.scale.height / 2;
+-    const panel = createPanel(this, panelX, panelY, 410, this.myRole === 'lamebotas' ? 330 : 300, 0x7c2d12);
+-    const title = createText(this, panelX, panelY - 135, this.myRole === 'lamebotas' ? 'SABOTAJES LAMEBOTAS' : 'SABOTAJE', { fontSize: '20px', color: '#ef4444', bold: true }).setOrigin(0.5);
+-
+-    const elements = [panel, title];
+-    const closeMenu = () => elements.forEach((el) => el?.destroy && el.destroy());
++    const narrow = this.scale.width < 450;
++    const panelW = narrow ? this.scale.width - 30 : 410;
++    const panel = createPanel(this, panelX, panelY, panelW, this.myRole === 'lamebotas' ? 330 : 300, 0x7c2d12);
++    const title = createText(this, panelX, panelY - 135, this.myRole === 'lamebotas' ? 'SABOTAJES LAMEBOTAS' : 'SABOTAJE', { fontSize: narrow ? '16px' : '20px', color: '#ef4444', bold: true }).setOrigin(0.5);
++
++    const elements = [panel, title];
++    this.activeSabotageMenu = { elements };
++    const closeMenu = () => this.closeSabotageMenu();
+ 
+     if (this.myRole === 'lamebotas') {
+@@ -618,17 +756,26 @@
+       actions.forEach(([label, fn], idx) => {
+-        const btn = createButton(this, panelX, panelY - 80 + idx * 55, label, () => { fn(); closeMenu(); }, { width: 280, height: 38, bgColor: 0x991b1b, bgHover: 0xdc2626, fontSize: '13px' });
++        const btn = createButton(this, panelX, panelY - 80 + idx * 55, label, () => { fn(); closeMenu(); }, { width: narrow ? panelW - 40 : 280, height: 38, bgColor: 0x991b1b, bgHover: 0xdc2626, fontSize: '13px' });
+         elements.push(btn.bg, btn.label);
+       });
+     }
+ 
+     const zones = ['recepcion', 'cubiculos', 'juntas', 'cocina', 'archivo', 'jefe_oficina', 'rh', 'servidor'];
+     const startY = this.myRole === 'lamebotas' ? panelY + 90 : panelY - 70;
+     zones.forEach((zid, i) => {
+-      const x = panelX + (i % 2 === 0 ? -100 : 100);
+-      const y = startY + Math.floor(i / 2) * 30;
+-      const btn = createButton(this, x, y, zid.toUpperCase(), () => { net.sabotageZone(zid); closeMenu(); }, { width: 180, height: 24, bgColor: 0x991b1b, bgHover: 0xdc2626, fontSize: '11px' });
++      let x, y, btnW;
++      if (narrow) {
++        x = panelX + (i % 2 === 0 ? - (panelW - 40) / 4 : (panelW - 40) / 4);
++        y = startY + Math.floor(i / 2) * 30;
++        btnW = (panelW - 60) / 2;
++      } else {
++        x = panelX + (i % 2 === 0 ? -100 : 100);
++        y = startY + Math.floor(i / 2) * 30;
++        btnW = 180;
++      }
++      const btn = createButton(this, x, y, zid.toUpperCase(), () => { net.sabotageZone(zid); closeMenu(); }, { width: btnW, height: 24, bgColor: 0x991b1b, bgHover: 0xdc2626, fontSize: '11px' });
+       elements.push(btn.bg, btn.label);
+     });
+     elements.forEach((el) => el.setScrollFactor?.(0));
+   }
++
++  closeSabotageMenu() {
++    if (this.activeSabotageMenu) {
++      this.activeSabotageMenu.elements.forEach((el) => el?.destroy && el.destroy());
++      this.activeSabotageMenu = null;
++    }
++  }
+ 
+   showFloatingText(text, color = 0xffffff) {
+     const ft = this.add.text(this.scale.width / 2, 92, text, {
+       fontSize: '16px',
+       color: '#' + color.toString(16).padStart(6, '0'),
+       fontStyle: 'bold',
+       backgroundColor: '#00000088',
+-      padding: { x: 10, y: 5 }
++      padding: { x: 10, y: 5 },
++      align: 'center',
++      wordWrap: { width: this.scale.width - 40 }
+     }).setOrigin(0.5).setScrollFactor(0).setDepth(9999);

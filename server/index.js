@@ -35,6 +35,15 @@ io.on('connection', (socket) => {
   // Crear sala
   socket.on('room:create', ({ name }) => {
     const playerName = (name || 'Jugador').slice(0, 12);
+    const roomsObj = roomManager.getAllRooms();
+    for (const rCode of Object.keys(roomsObj)) {
+      if (roomsObj[rCode].players[playerId]) {
+        roomManager.leaveRoom(rCode, playerId);
+        socket.leave(rCode);
+        io.to(rCode).emit('room:update', getRoomPayload(rCode));
+        io.to(rCode).emit('game:update', getGamePayload(rCode));
+      }
+    }
     const room = roomManager.createRoom(playerId, playerName);
     currentRoom = room.code;
     socket.join(currentRoom);
@@ -46,7 +55,17 @@ io.on('connection', (socket) => {
   // Unirse a sala
   socket.on('room:join', ({ code, name }) => {
     const playerName = (name || 'Jugador').slice(0, 12);
-    const result = roomManager.joinRoom(code.toUpperCase(), playerId, playerName);
+    const targetCode = code.toUpperCase();
+    const roomsObj = roomManager.getAllRooms();
+    for (const rCode of Object.keys(roomsObj)) {
+      if (roomsObj[rCode].players[playerId]) {
+        roomManager.leaveRoom(rCode, playerId);
+        socket.leave(rCode);
+        io.to(rCode).emit('room:update', getRoomPayload(rCode));
+        io.to(rCode).emit('game:update', getGamePayload(rCode));
+      }
+    }
+    const result = roomManager.joinRoom(targetCode, playerId, playerName);
     if (!result) {
       socket.emit('error:message', { message: 'Sala no encontrada' });
       return;
@@ -55,7 +74,7 @@ io.on('connection', (socket) => {
       socket.emit('error:message', { message: result.error });
       return;
     }
-    currentRoom = code.toUpperCase();
+    currentRoom = targetCode;
     socket.join(currentRoom);
     socket.emit('room:joined', { code: currentRoom, playerId });
     io.to(currentRoom).emit('room:update', getRoomPayload(currentRoom));
@@ -99,6 +118,9 @@ io.on('connection', (socket) => {
     const p = roomManager.movePlayer(currentRoom, playerId, x, y);
     if (p) {
       socket.to(currentRoom).emit('player:moved', { playerId, x: p.x, y: p.y });
+      if (p.x !== x || p.y !== y) {
+        socket.emit('player:moved', { playerId, x: p.x, y: p.y });
+      }
     }
   });
 
@@ -353,6 +375,14 @@ setInterval(() => {
 
 function canUseAbility(socket, room, playerId, ability) {
   const player = room.players[playerId];
+  if (player.suspendedUntil && Date.now() < player.suspendedUntil) {
+    socket.emit('error:message', { message: 'Habilidad bloqueada: Estás suspendido.' });
+    return false;
+  }
+  if (player.abilityBlockedUntil && Date.now() < player.abilityBlockedUntil) {
+    socket.emit('error:message', { message: 'Habilidad bloqueada temporalmente' });
+    return false;
+  }
   const cd = sabotage.checkCooldown(player, ability);
   if (!cd.ok) {
     socket.emit('error:message', { message: `Habilidad en cooldown: ${Math.ceil(cd.remainingMs / 1000)}s` });

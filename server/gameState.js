@@ -270,7 +270,15 @@ function startVoting(room) {
  */
 function castVote(room, voterId, targetId) {
   const gs = room.gameState;
-  if (gs.phase !== 'voting') return false;
+  console.log(`[DEBUG castVote] phase: ${gs.phase}, voter: ${voterId}, target: ${targetId}, room players:`, Object.keys(room.players || {}));
+  if (gs.phase !== 'voting') {
+    console.log(`[DEBUG castVote] Failed because phase is not voting (phase is ${gs.phase})`);
+    return false;
+  }
+  if (targetId !== 'skip' && (!room.players || !room.players[targetId])) {
+    console.log(`[DEBUG castVote] Failed because target is not skip and not a valid player`);
+    return false;
+  }
   gs.votes[voterId] = targetId;
   return true;
 }
@@ -290,14 +298,21 @@ function endVoting(room) {
     }
   }
 
-  // Encontrar el más votado
+  // Encontrar el más votado (los empates anulan la sanción)
   let maxVotes = 0;
   let sanctioned = null;
+  let tie = false;
   for (const [target, count] of Object.entries(tally)) {
     if (count > maxVotes) {
       maxVotes = count;
       sanctioned = target;
+      tie = false;
+    } else if (count === maxVotes) {
+      tie = true;
     }
+  }
+  if (tie) {
+    sanctioned = null;
   }
 
   let sanctionType = null;

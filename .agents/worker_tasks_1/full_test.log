@@ -1,0 +1,1011 @@
+TAP version 13
+# [OFICHAOS] Servidor corriendo en http://localhost:3458
+# [+] kJSEXo2FYe_s8qGBAAAB conectado
+# [ROOM] P1 creó sala 82AH4
+# Subtest: TC-T1-01: Room creation code gen
+ok 1 - TC-T1-01: Room creation code gen
+  ---
+  duration_ms: 9.775625
+  type: 'test'
+  ...
+# [-] kJSEXo2FYe_s8qGBAAAB desconectado
+# [+] 9W3_Im2ChWhQZMGBAAAD conectado
+# [ROOM] VeryLongName creó sala BP24A
+# [+] B2cNBnUNqxxf0wc8AAAF conectado
+# [ROOM] Jugador se unió a sala BP24A
+# Subtest: TC-T1-02: Name sanitization
+ok 2 - TC-T1-02: Name sanitization
+  ---
+  duration_ms: 3.71225
+  type: 'test'
+  ...
+# [-] 9W3_Im2ChWhQZMGBAAAD desconectado
+# [-] B2cNBnUNqxxf0wc8AAAF desconectado
+# [+] K4E_zSO4SRrjDiaXAAAH conectado
+# [ROOM] P1 creó sala K9LXE
+# [+] u4LX9oPNAteZsF9pAAAJ conectado
+# [ROOM] P2 se unió a sala K9LXE
+# Subtest: TC-T1-03: Room joining success
+ok 3 - TC-T1-03: Room joining success
+  ---
+  duration_ms: 3.076792
+  type: 'test'
+  ...
+# [-] K4E_zSO4SRrjDiaXAAAH desconectado
+# [-] u4LX9oPNAteZsF9pAAAJ desconectado
+# [+] zRqlip1XurwK_aI6AAAL conectado
+# [ROOM] Host creó sala 8DJ6X
+# [+] 9rOy3xqwma7YeXHzAAAN conectado
+# [ROOM] P_1 se unió a sala 8DJ6X
+# [+] EfzmMPIV12iDVQXyAAAP conectado
+# [ROOM] P_2 se unió a sala 8DJ6X
+# [+] oFkn9idMumuopP5oAAAR conectado
+# [ROOM] P_3 se unió a sala 8DJ6X
+# [+] sp20b4fW1dt6AmQyAAAT conectado
+# [ROOM] P_4 se unió a sala 8DJ6X
+# [+] Ughi0bFC0sEzDfUtAAAV conectado
+# [ROOM] P_5 se unió a sala 8DJ6X
+# [+] n551DnJbb80WDMs8AAAX conectado
+# [ROOM] P_6 se unió a sala 8DJ6X
+# [+] QPu-XA7JW-SGEx6eAAAZ conectado
+# [ROOM] P_7 se unió a sala 8DJ6X
+# [+] keiAssHuXrK8TqI_AAAb conectado
+# [ROOM] P_8 se unió a sala 8DJ6X
+# [+] 2Mn7ieQQktiMcZ_7AAAd conectado
+# [ROOM] P_9 se unió a sala 8DJ6X
+# [+] BHNawbPfhfb5R_CtAAAf conectado
+# [ROOM] P_10 se unió a sala 8DJ6X
+# [+] UYo6s4W9N0bb2tGgAAAh conectado
+# [ROOM] P_11 se unió a sala 8DJ6X
+# [+] UvzZAnBs7x7-9RveAAAj conectado
+# Subtest: TC-T1-04: Room joining limit
+ok 4 - TC-T1-04: Room joining limit
+  ---
+  duration_ms: 13.111917
+  type: 'test'
+  ...
+# [-] zRqlip1XurwK_aI6AAAL desconectado
+# [-] 9rOy3xqwma7YeXHzAAAN desconectado
+# [-] EfzmMPIV12iDVQXyAAAP desconectado
+# [-] oFkn9idMumuopP5oAAAR desconectado
+# [-] sp20b4fW1dt6AmQyAAAT desconectado
+# [-] Ughi0bFC0sEzDfUtAAAV desconectado
+# [-] n551DnJbb80WDMs8AAAX desconectado
+# [-] QPu-XA7JW-SGEx6eAAAZ desconectado
+# [-] keiAssHuXrK8TqI_AAAb desconectado
+# [-] 2Mn7ieQQktiMcZ_7AAAd desconectado
+# [-] BHNawbPfhfb5R_CtAAAf desconectado
+# [-] UYo6s4W9N0bb2tGgAAAh desconectado
+# [-] UvzZAnBs7x7-9RveAAAj desconectado
+# [+] Qps0bN6GnUkNT6nBAAAl conectado
+# [ROOM] P1 creó sala FJPHB
+# [+] KjP1Nm_Cl3wEZkiBAAAn conectado
+# [ROOM] P2 se unió a sala FJPHB
+# [-] Qps0bN6GnUkNT6nBAAAl desconectado
+# Subtest: TC-T1-05: Host migration
+ok 5 - TC-T1-05: Host migration
+  ---
+  duration_ms: 4.626125
+  type: 'test'
+  ...
+# [-] KjP1Nm_Cl3wEZkiBAAAn desconectado
+# [+] wR6EhSUakagf9TCdAAAp conectado
+# [+] LeXyM3UX1KfTQ54gAAAr conectado
+# [+] rEqCzRv2Buy_q64DAAAt conectado
+# [+] OR6V4IiW-118q1tRAAAv conectado
+# [ROOM] Host_4 creó sala R6EB2
+# [ROOM] Player_1 se unió a sala R6EB2
+# [ROOM] Player_2 se unió a sala R6EB2
+# [ROOM] Player_3 se unió a sala R6EB2
+# [GAME] Partida iniciada en sala R6EB2
+# Subtest: TC-T1-06: Movement broadcast
+ok 6 - TC-T1-06: Movement broadcast
+  ---
+  duration_ms: 3.137958
+  type: 'test'
+  ...
+# [-] wR6EhSUakagf9TCdAAAp desconectado
+# [-] LeXyM3UX1KfTQ54gAAAr desconectado
+# [-] rEqCzRv2Buy_q64DAAAt desconectado
+# [-] OR6V4IiW-118q1tRAAAv desconectado
+# [+] u8WbJKpCStUzZeiPAAAx conectado
+# [+] J2mNI5zjvyS3a0X5AAAz conectado
+# [+] mifSHxfwIIoE5wxPAAA1 conectado
+# [+] qK_JwqKzQo6xVAKdAAA3 conectado
+# [ROOM] Host_4 creó sala BLXNG
+# [ROOM] Player_1 se unió a sala BLXNG
+# [ROOM] Player_2 se unió a sala BLXNG
+# [ROOM] Player_3 se unió a sala BLXNG
+# [GAME] Partida iniciada en sala BLXNG
+# Subtest: TC-T1-07: Move block in meeting
+ok 7 - TC-T1-07: Move block in meeting
+  ---
+  duration_ms: 104.190834
+  type: 'test'
+  ...
+# [-] u8WbJKpCStUzZeiPAAAx desconectado
+# [-] J2mNI5zjvyS3a0X5AAAz desconectado
+# [-] mifSHxfwIIoE5wxPAAA1 desconectado
+# [-] qK_JwqKzQo6xVAKdAAA3 desconectado
+# [+] d7X1hQrfjfvgxmBSAAA5 conectado
+# [+] CTZARSKOkvo7CA-pAAA7 conectado
+# [+] LglO1nfh2i6d12qrAAA9 conectado
+# [+] bDIOBY7Z3kELnrfXAAA_ conectado
+# [ROOM] Host_4 creó sala U7J5V
+# [ROOM] Player_1 se unió a sala U7J5V
+# [ROOM] Player_2 se unió a sala U7J5V
+# [ROOM] Player_3 se unió a sala U7J5V
+# [GAME] Partida iniciada en sala U7J5V
+# Subtest: TC-T1-08: Move block in voting
+ok 8 - TC-T1-08: Move block in voting
+  ---
+  duration_ms: 108.157917
+  type: 'test'
+  ...
+# Subtest: TC-T1-09: Coordinate boundary clamping
+ok 9 - TC-T1-09: Coordinate boundary clamping
+  ---
+  duration_ms: 0.658375
+  type: 'test'
+  ...
+# [-] d7X1hQrfjfvgxmBSAAA5 desconectado
+# [-] CTZARSKOkvo7CA-pAAA7 desconectado
+# [-] LglO1nfh2i6d12qrAAA9 desconectado
+# [-] bDIOBY7Z3kELnrfXAAA_ desconectado
+# [+] 7f2yt1557lnHOFBfAABB conectado
+# [+] l59RtsKcdV8pRXE1AABD conectado
+# [+] 3VCV-STliH8N2hctAABF conectado
+# [+] M-mDmWkdcBFIcWt8AABH conectado
+# [ROOM] Host_4 creó sala HCB9G
+# [ROOM] Player_1 se unió a sala HCB9G
+# [ROOM] Player_2 se unió a sala HCB9G
+# [ROOM] Player_3 se unió a sala HCB9G
+# [GAME] Partida iniciada en sala HCB9G
+# Subtest: TC-T1-10: Tasks initialization
+ok 10 - TC-T1-10: Tasks initialization
+  ---
+  duration_ms: 8.492792
+  type: 'test'
+  ...
+# [-] 7f2yt1557lnHOFBfAABB desconectado
+# [-] l59RtsKcdV8pRXE1AABD desconectado
+# [-] 3VCV-STliH8N2hctAABF desconectado
+# [-] M-mDmWkdcBFIcWt8AABH desconectado
+# [+] 6zDFR5lYFwIFC1I5AABJ conectado
+# [+] mEA4_bPEF-8usrEaAABL conectado
+# [+] FJBiFhT0Xyrr_00_AABN conectado
+# [+] cPeLyC6oftMLo_7iAABP conectado
+# [ROOM] Host_4 creó sala 56UMP
+# [ROOM] Player_1 se unió a sala 56UMP
+# [ROOM] Player_2 se unió a sala 56UMP
+# [ROOM] Player_3 se unió a sala 56UMP
+# [GAME] Partida iniciada en sala 56UMP
+# Subtest: TC-T1-11: Task completion state
+ok 11 - TC-T1-11: Task completion state
+  ---
+  duration_ms: 7.240042
+  type: 'test'
+  ...
+# [-] 6zDFR5lYFwIFC1I5AABJ desconectado
+# [-] mEA4_bPEF-8usrEaAABL desconectado
+# [-] FJBiFhT0Xyrr_00_AABN desconectado
+# [-] cPeLyC6oftMLo_7iAABP desconectado
+# [+] oca2uYglH2i_kYcqAABR conectado
+# [+] 3Cq8_5Jb9ACvGWdAAABT conectado
+# [+] QjpKte-ytnwcPwIBAABV conectado
+# [+] DXUQuwLkPv-VTqWOAABX conectado
+# [ROOM] Host_4 creó sala VLM8R
+# [ROOM] Player_1 se unió a sala VLM8R
+# [ROOM] Player_2 se unió a sala VLM8R
+# [ROOM] Player_3 se unió a sala VLM8R
+# [GAME] Partida iniciada en sala VLM8R
+# Subtest: TC-T1-12: Tasks percent calculation
+ok 12 - TC-T1-12: Tasks percent calculation
+  ---
+  duration_ms: 5.591166
+  type: 'test'
+  ...
+# [-] oca2uYglH2i_kYcqAABR desconectado
+# [-] 3Cq8_5Jb9ACvGWdAAABT desconectado
+# [-] QjpKte-ytnwcPwIBAABV desconectado
+# [-] DXUQuwLkPv-VTqWOAABX desconectado
+# [+] 0MOyZsx6i40qnhgPAABZ conectado
+# [+] CrKGl9Ko7Qdsq6NKAABb conectado
+# [+] 5JlQqofPeEbCr97YAABd conectado
+# [+] IQwbf-rhPpNtEgIgAABf conectado
+# [ROOM] Host_4 creó sala 5MG3D
+# [ROOM] Player_1 se unió a sala 5MG3D
+# [ROOM] Player_2 se unió a sala 5MG3D
+# [ROOM] Player_3 se unió a sala 5MG3D
+# [GAME] Partida iniciada en sala 5MG3D
+# Subtest: TC-T1-13: Task morale gain
+ok 13 - TC-T1-13: Task morale gain
+  ---
+  duration_ms: 4.538583
+  type: 'test'
+  ...
+# [-] 0MOyZsx6i40qnhgPAABZ desconectado
+# [-] CrKGl9Ko7Qdsq6NKAABb desconectado
+# [-] 5JlQqofPeEbCr97YAABd desconectado
+# [-] IQwbf-rhPpNtEgIgAABf desconectado
+# [+] UP7IM4GQ4cxXdbamAABh conectado
+# [+] 22k5pw-nVGJG0O6jAABj conectado
+# [+] XNNTn6MW3HsojY1dAABl conectado
+# [+] o90RGLJ0HY5M_5uDAABn conectado
+# [ROOM] Host_4 creó sala ESDKK
+# [ROOM] Player_1 se unió a sala ESDKK
+# [ROOM] Player_2 se unió a sala ESDKK
+# [ROOM] Player_3 se unió a sala ESDKK
+# [GAME] Partida iniciada en sala ESDKK
+# Subtest: TC-T1-14: Role assignment: 4 players
+ok 14 - TC-T1-14: Role assignment: 4 players
+  ---
+  duration_ms: 5.667584
+  type: 'test'
+  ...
+# [-] UP7IM4GQ4cxXdbamAABh desconectado
+# [-] 22k5pw-nVGJG0O6jAABj desconectado
+# [-] XNNTn6MW3HsojY1dAABl desconectado
+# [-] o90RGLJ0HY5M_5uDAABn desconectado
+# [+] sOgqBsP3Ads1QJ9WAABp conectado
+# [+] 4LgTJXIGjRRruPigAABr conectado
+# [+] zm6rBOCEkxhEu1X8AABt conectado
+# [+] LNnvtpkM0TDLLzdtAABv conectado
+# [+] sqPleWthRWx-91-ZAABx conectado
+# [ROOM] Host_5 creó sala U9FXF
+# [ROOM] Player_1 se unió a sala U9FXF
+# [ROOM] Player_2 se unió a sala U9FXF
+# [ROOM] Player_3 se unió a sala U9FXF
+# [ROOM] Player_4 se unió a sala U9FXF
+# [GAME] Partida iniciada en sala U9FXF
+# Subtest: TC-T1-15: Role assignment: 5 players
+ok 15 - TC-T1-15: Role assignment: 5 players
+  ---
+  duration_ms: 12.202084
+  type: 'test'
+  ...
+# [-] sOgqBsP3Ads1QJ9WAABp desconectado
+# [-] 4LgTJXIGjRRruPigAABr desconectado
+# [-] zm6rBOCEkxhEu1X8AABt desconectado
+# [-] LNnvtpkM0TDLLzdtAABv desconectado
+# [-] sqPleWthRWx-91-ZAABx desconectado
+# [+] 0QNURIhq7JEjiZM6AABz conectado
+# [+] s6IfSMAY_v72E8onAAB1 conectado
+# [+] Yz6TZ7yFvi82axjJAAB3 conectado
+# [+] wMjA6MsNtfcs3o51AAB5 conectado
+# [ROOM] Host_4 creó sala Z83S3
+# [ROOM] Player_1 se unió a sala Z83S3
+# [ROOM] Player_2 se unió a sala Z83S3
+# [ROOM] Player_3 se unió a sala Z83S3
+# [GAME] Partida iniciada en sala Z83S3
+# Subtest: TC-T1-16: Objectives assignment
+ok 16 - TC-T1-16: Objectives assignment
+  ---
+  duration_ms: 11.854834
+  type: 'test'
+  ...
+# [-] 0QNURIhq7JEjiZM6AABz desconectado
+# [-] s6IfSMAY_v72E8onAAB1 desconectado
+# [-] Yz6TZ7yFvi82axjJAAB3 desconectado
+# [-] wMjA6MsNtfcs3o51AAB5 desconectado
+# [+] Ug6i-oTEq10Hmi-UAAB7 conectado
+# [+] 3HYoMPjQlE6rp3voAAB9 conectado
+# [+] 9LcwqqUoMa6BmRw7AAB_ conectado
+# [+] rZ9lixzVMqUMlc10AACB conectado
+# [ROOM] Host creó sala UJADT
+# [ROOM] Player_1 se unió a sala UJADT
+# [ROOM] Player_2 se unió a sala UJADT
+# [ROOM] Player_3 se unió a sala UJADT
+# [GAME] Partida iniciada en sala UJADT
+# Subtest: TC-T1-17: Private role emissions
+ok 17 - TC-T1-17: Private role emissions
+  ---
+  duration_ms: 6.233166
+  type: 'test'
+  ...
+# [-] Ug6i-oTEq10Hmi-UAAB7 desconectado
+# [-] 3HYoMPjQlE6rp3voAAB9 desconectado
+# [-] 9LcwqqUoMa6BmRw7AAB_ desconectado
+# [-] rZ9lixzVMqUMlc10AACB desconectado
+# [+] 9TI0ijL5Wev4Kzf6AACD conectado
+# [+] ldVdcQWq_9NT1dlzAACF conectado
+# [+] sGxCIrmdHQVAcHRjAACH conectado
+# [+] kos80zlj9AB3PfzlAACJ conectado
+# [ROOM] Host_4 creó sala ATGLK
+# [ROOM] Player_1 se unió a sala ATGLK
+# [ROOM] Player_2 se unió a sala ATGLK
+# [ROOM] Player_3 se unió a sala ATGLK
+# [GAME] Partida iniciada en sala ATGLK
+# Subtest: TC-T1-18: Emergency meeting trigger
+ok 18 - TC-T1-18: Emergency meeting trigger
+  ---
+  duration_ms: 4.19
+  type: 'test'
+  ...
+# [-] 9TI0ijL5Wev4Kzf6AACD desconectado
+# [-] ldVdcQWq_9NT1dlzAACF desconectado
+# [-] sGxCIrmdHQVAcHRjAACH desconectado
+# [-] kos80zlj9AB3PfzlAACJ desconectado
+# [+] hiexIj3qb3pEbxbCAACL conectado
+# [+] 0S_OvSlln04KFpUAAACN conectado
+# [+] tlA1jKrS8rJdQb7QAACP conectado
+# [+] GUBtMMlZVnECXjEHAACR conectado
+# [ROOM] Host_4 creó sala NQQA8
+# [ROOM] Player_1 se unió a sala NQQA8
+# [ROOM] Player_2 se unió a sala NQQA8
+# [ROOM] Player_3 se unió a sala NQQA8
+# [GAME] Partida iniciada en sala NQQA8
+# Subtest: TC-T1-19: Emergency meeting limit
+ok 19 - TC-T1-19: Emergency meeting limit
+  ---
+  duration_ms: 88.345834
+  type: 'test'
+  ...
+# [-] hiexIj3qb3pEbxbCAACL desconectado
+# [-] 0S_OvSlln04KFpUAAACN desconectado
+# [-] tlA1jKrS8rJdQb7QAACP desconectado
+# [-] GUBtMMlZVnECXjEHAACR desconectado
+# [+] Mn3OYbUD10pVgxgYAACT conectado
+# [+] iWCX_homMM2AAPH9AACV conectado
+# [+] C9H50TK7PLXGCsZXAACX conectado
+# [+] hG4BkPVTGx7HGkXrAACZ conectado
+# [ROOM] Host_4 creó sala YT87B
+# [ROOM] Player_1 se unió a sala YT87B
+# [ROOM] Player_2 se unió a sala YT87B
+# [ROOM] Player_3 se unió a sala YT87B
+# [GAME] Partida iniciada en sala YT87B
+# Subtest: TC-T1-20: Voting phase transition
+ok 20 - TC-T1-20: Voting phase transition
+  ---
+  duration_ms: 50.482792
+  type: 'test'
+  ...
+# [-] Mn3OYbUD10pVgxgYAACT desconectado
+# [-] iWCX_homMM2AAPH9AACV desconectado
+# [-] C9H50TK7PLXGCsZXAACX desconectado
+# [-] hG4BkPVTGx7HGkXrAACZ desconectado
+# [+] HkO19S1u5uKvj-qQAACb conectado
+# [+] Pk7I8yzXesCawqZWAACd conectado
+# [+] EQNGOr0ZT9rLnO97AACf conectado
+# [+] Ll-Kjoj4bjvKAiKfAACh conectado
+# [ROOM] Host_4 creó sala EZ7ZX
+# [ROOM] Player_1 se unió a sala EZ7ZX
+# [ROOM] Player_2 se unió a sala EZ7ZX
+# [ROOM] Player_3 se unió a sala EZ7ZX
+# [GAME] Partida iniciada en sala EZ7ZX
+# Subtest: TC-T1-21: Meeting chat relay
+ok 21 - TC-T1-21: Meeting chat relay
+  ---
+  duration_ms: 4.948667
+  type: 'test'
+  ...
+# [-] HkO19S1u5uKvj-qQAACb desconectado
+# [-] Pk7I8yzXesCawqZWAACd desconectado
+# [-] EQNGOr0ZT9rLnO97AACf desconectado
+# [-] Ll-Kjoj4bjvKAiKfAACh desconectado
+# [+] ysZuB26BYWGraeAdAACj conectado
+# [+] Qr6Cr7Dg6e7q1EeTAACl conectado
+# [+] hSTZg4VAfK_1U-nhAACn conectado
+# [+] Kj-fnETXK5XiA2-PAACp conectado
+# [ROOM] Host_4 creó sala PFEDX
+# [ROOM] Player_1 se unió a sala PFEDX
+# [ROOM] Player_2 se unió a sala PFEDX
+# [ROOM] Player_3 se unió a sala PFEDX
+# [GAME] Partida iniciada en sala PFEDX
+# [SABOTAGE] Player_3 saboteó zona cocina
+# Subtest: TC-T1-22: Sabotage trigger (Zone)
+ok 22 - TC-T1-22: Sabotage trigger (Zone)
+  ---
+  duration_ms: 4.489
+  type: 'test'
+  ...
+# [-] ysZuB26BYWGraeAdAACj desconectado
+# [-] Qr6Cr7Dg6e7q1EeTAACl desconectado
+# [-] hSTZg4VAfK_1U-nhAACn desconectado
+# [-] Kj-fnETXK5XiA2-PAACp desconectado
+# [+] 6Rm9wGD0M8PiaBmPAACr conectado
+# [+] 7-RCCpFgA8zF67ADAACt conectado
+# [+] TJ5pswKYz5DlQV2HAACv conectado
+# [+] OvfYIKcXX3BdxJ1qAACx conectado
+# [ROOM] Host_4 creó sala 5NR57
+# [ROOM] Player_1 se unió a sala 5NR57
+# [ROOM] Player_2 se unió a sala 5NR57
+# [ROOM] Player_3 se unió a sala 5NR57
+# [GAME] Partida iniciada en sala 5NR57
+# [SABOTAGE] Player_3 saboteó zona cocina
+# Subtest: TC-T1-23: Ability cooldown initialization
+ok 23 - TC-T1-23: Ability cooldown initialization
+  ---
+  duration_ms: 4.290958
+  type: 'test'
+  ...
+# [-] 6Rm9wGD0M8PiaBmPAACr desconectado
+# [-] 7-RCCpFgA8zF67ADAACt desconectado
+# [-] TJ5pswKYz5DlQV2HAACv desconectado
+# [-] OvfYIKcXX3BdxJ1qAACx desconectado
+# [+] 89oZuk8VhLRZQjbLAACz conectado
+# [+] PHgfftpwBkGHwEMaAAC1 conectado
+# [+] CCLDZtJHw9NcDPvJAAC3 conectado
+# [+] 5AqeD-SGXt_9ZucqAAC5 conectado
+# [ROOM] Host_4 creó sala 8WUXP
+# [ROOM] Player_1 se unió a sala 8WUXP
+# [ROOM] Player_2 se unió a sala 8WUXP
+# [ROOM] Player_3 se unió a sala 8WUXP
+# [GAME] Partida iniciada en sala 8WUXP
+# [SABOTAGE] Player_3 saboteó zona cocina
+# Subtest: TC-T1-24: Ability cooldown enforcement
+ok 24 - TC-T1-24: Ability cooldown enforcement
+  ---
+  duration_ms: 4.546333
+  type: 'test'
+  ...
+# [-] 89oZuk8VhLRZQjbLAACz desconectado
+# [-] PHgfftpwBkGHwEMaAAC1 desconectado
+# [-] CCLDZtJHw9NcDPvJAAC3 desconectado
+# [-] 5AqeD-SGXt_9ZucqAAC5 desconectado
+# [+] Rr19irVssChbHFhjAAC7 conectado
+# [+] 8qehgrdK9dD08PgcAAC9 conectado
+# [+] 7eZlgry1s4Lfun_wAAC_ conectado
+# [+] 9hoyzrQUxB6p5N-RAADB conectado
+# [ROOM] Host_4 creó sala EJY8M
+# [ROOM] Player_1 se unió a sala EJY8M
+# [ROOM] Player_2 se unió a sala EJY8M
+# [ROOM] Player_3 se unió a sala EJY8M
+# [GAME] Partida iniciada en sala EJY8M
+# Subtest: TC-T1-25: Direct morale damage
+ok 25 - TC-T1-25: Direct morale damage
+  ---
+  duration_ms: 3.561541
+  type: 'test'
+  ...
+# [-] Rr19irVssChbHFhjAAC7 desconectado
+# [-] 8qehgrdK9dD08PgcAAC9 desconectado
+# [-] 7eZlgry1s4Lfun_wAAC_ desconectado
+# [-] 9hoyzrQUxB6p5N-RAADB desconectado
+# [+] sVSbk_0mx9t4TAW0AADD conectado
+# [+] OGyuVmxfHjQjyiYjAADF conectado
+# [+] xtsQ4NmZOOP1nmSEAADH conectado
+# [+] OnLKx8AfPW89n5JFAADJ conectado
+# [ROOM] Host_4 creó sala VAEXN
+# [ROOM] Player_1 se unió a sala VAEXN
+# [ROOM] Player_2 se unió a sala VAEXN
+# [ROOM] Player_3 se unió a sala VAEXN
+# [GAME] Partida iniciada en sala VAEXN
+# Subtest: TC-T2-01: Lobby startup check
+ok 26 - TC-T2-01: Lobby startup check
+  ---
+  duration_ms: 3.251917
+  type: 'test'
+  ...
+# [-] sVSbk_0mx9t4TAW0AADD desconectado
+# [-] OGyuVmxfHjQjyiYjAADF desconectado
+# [-] xtsQ4NmZOOP1nmSEAADH desconectado
+# [-] OnLKx8AfPW89n5JFAADJ desconectado
+# [+] ox4tPSQaC_OkdNdqAADL conectado
+# [+] ocfYxHf_P7UL8ak7AADN conectado
+# [+] fnjDiyBF5D23YM_KAADP conectado
+# [ROOM] Host creó sala RGWM7
+# [ROOM] Player_1 se unió a sala RGWM7
+# [ROOM] Player_2 se unió a sala RGWM7
+# Subtest: TC-T2-02: Start player validation
+ok 27 - TC-T2-02: Start player validation
+  ---
+  duration_ms: 2.381333
+  type: 'test'
+  ...
+# [-] ox4tPSQaC_OkdNdqAADL desconectado
+# [-] ocfYxHf_P7UL8ak7AADN desconectado
+# [-] fnjDiyBF5D23YM_KAADP desconectado
+# [+] 5uk0YO4n6uvhRqaOAADR conectado
+# [+] muWWGGT7q_rcs8lSAADT conectado
+# [+] SPvb-tnGImiCpDTGAADV conectado
+# [+] tJSLa_KHEfuOGYE4AADX conectado
+# [ROOM] Host_4 creó sala E9N9K
+# [ROOM] Player_1 se unió a sala E9N9K
+# [ROOM] Player_2 se unió a sala E9N9K
+# [ROOM] Player_3 se unió a sala E9N9K
+# [GAME] Partida iniciada en sala E9N9K
+# Subtest: TC-T2-03: Full meeting cycle
+ok 28 - TC-T2-03: Full meeting cycle
+  ---
+  duration_ms: 74.5645
+  type: 'test'
+  ...
+# [-] 5uk0YO4n6uvhRqaOAADR desconectado
+# [-] muWWGGT7q_rcs8lSAADT desconectado
+# [-] SPvb-tnGImiCpDTGAADV desconectado
+# [-] tJSLa_KHEfuOGYE4AADX desconectado
+# [+] _LypFoRBbFkLJkARAADZ conectado
+# [+] S02vKrMp7fQqLQx9AADb conectado
+# [+] L1XT74VxB4aKW3GIAADd conectado
+# [+] BokWs97Ekgn0Db8hAADf conectado
+# [ROOM] Host_4 creó sala 7K9DM
+# [ROOM] Player_1 se unió a sala 7K9DM
+# [ROOM] Player_2 se unió a sala 7K9DM
+# [ROOM] Player_3 se unió a sala 7K9DM
+# [GAME] Partida iniciada en sala 7K9DM
+# [GAME] Partida terminada en sala 7K9DM: empleados
+# Subtest: TC-T2-05: Employee victory trigger
+ok 29 - TC-T2-05: Employee victory trigger
+  ---
+  duration_ms: 51.0905
+  type: 'test'
+  ...
+# [-] _LypFoRBbFkLJkARAADZ desconectado
+# [-] S02vKrMp7fQqLQx9AADb desconectado
+# [-] L1XT74VxB4aKW3GIAADd desconectado
+# [-] BokWs97Ekgn0Db8hAADf desconectado
+# [+] HHqPelSnaJDfNPxEAADh conectado
+# [+] oW55Go0OAsqshfyTAADj conectado
+# [+] pLQEuuEHkJlEZ8u_AADl conectado
+# [+] A6C5YeZoV4yqCugqAADn conectado
+# [+] JrnNdG7TRrWZbotTAADp conectado
+# [ROOM] Host_5 creó sala UM3UP
+# [ROOM] Player_1 se unió a sala UM3UP
+# [ROOM] Player_2 se unió a sala UM3UP
+# [ROOM] Player_3 se unió a sala UM3UP
+# [ROOM] Player_4 se unió a sala UM3UP
+# [GAME] Partida iniciada en sala UM3UP
+# Subtest: TC-T2-07: Task blocking sabotage
+ok 30 - TC-T2-07: Task blocking sabotage
+  ---
+  duration_ms: 7.7365
+  type: 'test'
+  ...
+# [-] HHqPelSnaJDfNPxEAADh desconectado
+# [-] oW55Go0OAsqshfyTAADj desconectado
+# [-] pLQEuuEHkJlEZ8u_AADl desconectado
+# [-] A6C5YeZoV4yqCugqAADn desconectado
+# [-] JrnNdG7TRrWZbotTAADp desconectado
+# [+] D4HDbTQXcbt0bzj-AADr conectado
+# [+] L4_OXANUkJpkiOhBAADt conectado
+# [+] HxFmZ8kbg1PDdVKGAADv conectado
+# [+] IAJqjMrHTC8ZyxvqAADx conectado
+# [ROOM] Host_4 creó sala LL37X
+# [ROOM] Player_1 se unió a sala LL37X
+# [ROOM] Player_2 se unió a sala LL37X
+# [ROOM] Player_3 se unió a sala LL37X
+# [GAME] Partida iniciada en sala LL37X
+# Subtest: TC-T2-08: Reject double complete
+ok 31 - TC-T2-08: Reject double complete
+  ---
+  duration_ms: 5.155625
+  type: 'test'
+  ...
+# [-] D4HDbTQXcbt0bzj-AADr desconectado
+# [-] L4_OXANUkJpkiOhBAADt desconectado
+# [-] HxFmZ8kbg1PDdVKGAADv desconectado
+# [-] IAJqjMrHTC8ZyxvqAADx desconectado
+# [+] q68CrEJ8L69Kk0AqAADz conectado
+# [+] YaiQdIpvsRbdUUj1AAD1 conectado
+# [+] JXyU3cguhvlqYJRMAAD3 conectado
+# [+] 0L7VRBR9pVQmAqGAAAD5 conectado
+# [ROOM] Host_4 creó sala AMQE8
+# [ROOM] Player_1 se unió a sala AMQE8
+# [ROOM] Player_2 se unió a sala AMQE8
+# [ROOM] Player_3 se unió a sala AMQE8
+# [GAME] Partida iniciada en sala AMQE8
+# Subtest: TC-T2-09: Burnout state activation
+ok 32 - TC-T2-09: Burnout state activation
+  ---
+  duration_ms: 104.016
+  type: 'test'
+  ...
+# [-] q68CrEJ8L69Kk0AqAADz desconectado
+# [-] YaiQdIpvsRbdUUj1AAD1 desconectado
+# [-] JXyU3cguhvlqYJRMAAD3 desconectado
+# [-] 0L7VRBR9pVQmAqGAAAD5 desconectado
+# [+] nV9GWHxsHx5EJnKbAAD7 conectado
+# [+] tb8c1aFjjpkSSyn_AAD9 conectado
+# [+] JpFctZFsX4b7oYIFAAD_ conectado
+# [+] MwpG2YbyGAvO1-4PAAEB conectado
+# [ROOM] Host_4 creó sala BAQ86
+# [ROOM] Player_1 se unió a sala BAQ86
+# [ROOM] Player_2 se unió a sala BAQ86
+# [ROOM] Player_3 se unió a sala BAQ86
+# [GAME] Partida iniciada en sala BAQ86
+# [Anti-Cheat] Movimiento rechazado para Player_1. Distancia: 141.4, Máx permitida: 52.5, dt: 0.250s
+# Subtest: TC-T2-10: Burnout movement penalty
+not ok 33 - TC-T2-10: Burnout movement penalty
+  ---
+  duration_ms: 110.172
+  type: 'test'
+  location: '/Users/luisdeleon/AIWorkspace/games/ofichaos/tests/e2e.test.js:870:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    100 !== 150
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 150
+  actual: 100
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/luisdeleon/AIWorkspace/games/ofichaos/tests/e2e.test.js:886:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# [+] A2o2crHT85RoYa_2AAED conectado
+# [+] v62_sjqyzIiJa46lAAEF conectado
+# [+] gj4WYTxb9pYTjyiYAAEH conectado
+# [+] wCyWQXXLi-vZFLkTAAEJ conectado
+# [ROOM] Host_4 creó sala DTWSW
+# [ROOM] Player_1 se unió a sala DTWSW
+# [ROOM] Player_2 se unió a sala DTWSW
+# [ROOM] Player_3 se unió a sala DTWSW
+# [GAME] Partida iniciada en sala DTWSW
+# Subtest: TC-T2-11: Burnout task lockout
+ok 34 - TC-T2-11: Burnout task lockout
+  ---
+  duration_ms: 110.864958
+  type: 'test'
+  ...
+# [-] A2o2crHT85RoYa_2AAED desconectado
+# [-] v62_sjqyzIiJa46lAAEF desconectado
+# [-] gj4WYTxb9pYTjyiYAAEH desconectado
+# [-] wCyWQXXLi-vZFLkTAAEJ desconectado
+# [+] k5T7GNdt7PxNtX3GAAEL conectado
+# [+] VaV7n2Gj8SIze4iPAAEN conectado
+# [+] sV9cRCdkcHYczJl0AAEP conectado
+# [+] IlFNuyUn_RAD3kklAAER conectado
+# [ROOM] Host_4 creó sala 5LUZY
+# [ROOM] Player_1 se unió a sala 5LUZY
+# [ROOM] Player_2 se unió a sala 5LUZY
+# [ROOM] Player_3 se unió a sala 5LUZY
+# [GAME] Partida iniciada en sala 5LUZY
+# Subtest: TC-T2-12: Burnout automatic recovery
+ok 35 - TC-T2-12: Burnout automatic recovery
+  ---
+  duration_ms: 216.008083
+  type: 'test'
+  ...
+# [-] k5T7GNdt7PxNtX3GAAEL desconectado
+# [-] VaV7n2Gj8SIze4iPAAEN desconectado
+# [-] sV9cRCdkcHYczJl0AAEP desconectado
+# [-] IlFNuyUn_RAD3kklAAER desconectado
+# [+] JtfrT4sz8xgYHLzPAAET conectado
+# [+] YEAaLJ17cbyOXoryAAEV conectado
+# [+] 3yjIyYxJsF_hLuLFAAEX conectado
+# [+] o43wfTOX2SqT9MqlAAEZ conectado
+# [ROOM] Host_4 creó sala Z5AU8
+# [ROOM] Player_1 se unió a sala Z5AU8
+# [ROOM] Player_2 se unió a sala Z5AU8
+# [ROOM] Player_3 se unió a sala Z5AU8
+# [GAME] Partida iniciada en sala Z5AU8
+# [GAME] Partida terminada en sala Z5AU8: jefe
+# Subtest: TC-T2-13: Boss win by timeout
+ok 36 - TC-T2-13: Boss win by timeout
+  ---
+  duration_ms: 58.027792
+  type: 'test'
+  ...
+# [-] JtfrT4sz8xgYHLzPAAET desconectado
+# [-] YEAaLJ17cbyOXoryAAEV desconectado
+# [-] 3yjIyYxJsF_hLuLFAAEX desconectado
+# [-] o43wfTOX2SqT9MqlAAEZ desconectado
+# [+] dEylOxID2OZG0mcpAAEb conectado
+# [+] Lqv999e2FcRxDLEpAAEd conectado
+# [+] 6jmqzLATNJpqaML2AAEf conectado
+# [+] IwUS_BkGnLpZQki0AAEh conectado
+# [ROOM] Host_4 creó sala CYLQA
+# [ROOM] Player_1 se unió a sala CYLQA
+# [ROOM] Player_2 se unió a sala CYLQA
+# [ROOM] Player_3 se unió a sala CYLQA
+# [GAME] Partida iniciada en sala CYLQA
+# [GAME] Partida terminada en sala CYLQA: jefe
+# Subtest: TC-T2-14: Boss win by burnout rate
+ok 37 - TC-T2-14: Boss win by burnout rate
+  ---
+  duration_ms: 51.823625
+  type: 'test'
+  ...
+# [-] dEylOxID2OZG0mcpAAEb desconectado
+# [-] Lqv999e2FcRxDLEpAAEd desconectado
+# [-] 6jmqzLATNJpqaML2AAEf desconectado
+# [-] IwUS_BkGnLpZQki0AAEh desconectado
+# [+] lYMxh4cJJtWcocQFAAEj conectado
+# [+] USP2BOLSYYHADSykAAEl conectado
+# [+] fBXjHyaRl0t-vIk0AAEn conectado
+# [+] J_siV2q5MZssqj2nAAEp conectado
+# [+] _yGiZfa5qDZ73BTBAAEr conectado
+# [ROOM] Host_5 creó sala X4M6S
+# [ROOM] Player_1 se unió a sala X4M6S
+# [ROOM] Player_2 se unió a sala X4M6S
+# [ROOM] Player_3 se unió a sala X4M6S
+# [ROOM] Player_4 se unió a sala X4M6S
+# [GAME] Partida iniciada en sala X4M6S
+# [GAME] Partida terminada en sala X4M6S: jefe
+# Subtest: TC-T2-15: Lamebotas win condition
+ok 38 - TC-T2-15: Lamebotas win condition
+  ---
+  duration_ms: 49.971709
+  type: 'test'
+  ...
+# [-] lYMxh4cJJtWcocQFAAEj desconectado
+# [-] USP2BOLSYYHADSykAAEl desconectado
+# [-] fBXjHyaRl0t-vIk0AAEn desconectado
+# [-] J_siV2q5MZssqj2nAAEp desconectado
+# [-] _yGiZfa5qDZ73BTBAAEr desconectado
+# [+] jISDblel-ksPwLExAAEt conectado
+# [+] krFX1FoxAgqOnmZ3AAEv conectado
+# [+] YO2dqErHln8i2d-sAAEx conectado
+# [+] xbKchrSFOnkR_q1IAAEz conectado
+# [ROOM] Host_4 creó sala UH545
+# [ROOM] Player_1 se unió a sala UH545
+# [ROOM] Player_2 se unió a sala UH545
+# [ROOM] Player_3 se unió a sala UH545
+# [GAME] Partida iniciada en sala UH545
+# Subtest: TC-T2-16: Meeting skip resolution
+ok 39 - TC-T2-16: Meeting skip resolution
+  ---
+  duration_ms: 103.097125
+  type: 'test'
+  ...
+# [-] jISDblel-ksPwLExAAEt desconectado
+# [-] krFX1FoxAgqOnmZ3AAEv desconectado
+# [-] YO2dqErHln8i2d-sAAEx desconectado
+# [-] xbKchrSFOnkR_q1IAAEz desconectado
+# [+] iy5KgYENEPijSPsEAAE1 conectado
+# [+] DQ-hMoWVaL_9fEFCAAE3 conectado
+# [+] wwu13dkPJonjWyW_AAE5 conectado
+# [+] hpu-eK84Tzdau3GXAAE7 conectado
+# [ROOM] Host_4 creó sala JJXLE
+# [ROOM] Player_1 se unió a sala JJXLE
+# [ROOM] Player_2 se unió a sala JJXLE
+# [ROOM] Player_3 se unió a sala JJXLE
+# [GAME] Partida iniciada en sala JJXLE
+# Subtest: TC-T2-17: Sanction 1: Ability Block
+ok 40 - TC-T2-17: Sanction 1: Ability Block
+  ---
+  duration_ms: 102.711583
+  type: 'test'
+  ...
+# [-] iy5KgYENEPijSPsEAAE1 desconectado
+# [-] DQ-hMoWVaL_9fEFCAAE3 desconectado
+# [-] wwu13dkPJonjWyW_AAE5 desconectado
+# [-] hpu-eK84Tzdau3GXAAE7 desconectado
+# [+] eguD6BCtGslSbIxuAAE9 conectado
+# [+] ESQP7h7-Ut4kdq6rAAE_ conectado
+# [+] cAlVo2DbX3OdMPYOAAFB conectado
+# [+] 8odTFji6zxgfMbkNAAFD conectado
+# [ROOM] Host_4 creó sala 2T6RA
+# [ROOM] Player_1 se unió a sala 2T6RA
+# [ROOM] Player_2 se unió a sala 2T6RA
+# [ROOM] Player_3 se unió a sala 2T6RA
+# [GAME] Partida iniciada en sala 2T6RA
+# Subtest: TC-T2-18: Sanction 2: Suspension
+ok 41 - TC-T2-18: Sanction 2: Suspension
+  ---
+  duration_ms: 103.547625
+  type: 'test'
+  ...
+# [-] eguD6BCtGslSbIxuAAE9 desconectado
+# [-] ESQP7h7-Ut4kdq6rAAE_ desconectado
+# [-] cAlVo2DbX3OdMPYOAAFB desconectado
+# [-] 8odTFji6zxgfMbkNAAFD desconectado
+# [+] RbkazK9DN1MYG7mUAAFF conectado
+# [+] pZxx0s_XY3MVMpuhAAFH conectado
+# [+] 154pBdq_8U4jCNn2AAFJ conectado
+# [+] DZJdc5FH3KVbUvhTAAFL conectado
+# [ROOM] Host_4 creó sala Q9YTZ
+# [ROOM] Player_1 se unió a sala Q9YTZ
+# [ROOM] Player_2 se unió a sala Q9YTZ
+# [ROOM] Player_3 se unió a sala Q9YTZ
+# [GAME] Partida iniciada en sala Q9YTZ
+# Subtest: TC-T2-19: Voting tie skip
+ok 42 - TC-T2-19: Voting tie skip
+  ---
+  duration_ms: 100.48025
+  type: 'test'
+  ...
+# [-] RbkazK9DN1MYG7mUAAFF desconectado
+# [-] pZxx0s_XY3MVMpuhAAFH desconectado
+# [-] 154pBdq_8U4jCNn2AAFJ desconectado
+# [-] DZJdc5FH3KVbUvhTAAFL desconectado
+# [+] inAIPo3F3xhj4aSOAAFN conectado
+# [+] EfiRMkbXroakcXhwAAFP conectado
+# [+] 96GfEfYeem_qqiIjAAFR conectado
+# [+] rdt-pIG3Veajx5dEAAFT conectado
+# [+] zO88UBRbZZLoBpWiAAFV conectado
+# [ROOM] Host_5 creó sala BJJMW
+# [ROOM] Player_1 se unió a sala BJJMW
+# [ROOM] Player_2 se unió a sala BJJMW
+# [ROOM] Player_3 se unió a sala BJJMW
+# [ROOM] Player_4 se unió a sala BJJMW
+# [GAME] Partida iniciada en sala BJJMW
+# Subtest: TC-T2-20: Lamebotas fake task morale
+ok 43 - TC-T2-20: Lamebotas fake task morale
+  ---
+  duration_ms: 9.023541
+  type: 'test'
+  ...
+# [-] inAIPo3F3xhj4aSOAAFN desconectado
+# [-] EfiRMkbXroakcXhwAAFP desconectado
+# [-] 96GfEfYeem_qqiIjAAFR desconectado
+# [-] rdt-pIG3Veajx5dEAAFT desconectado
+# [-] zO88UBRbZZLoBpWiAAFV desconectado
+# [+] 2b1L6ID4E481bfgjAAFX conectado
+# [+] ktPllrc0rYPVtnThAAFZ conectado
+# [+] 3uuk7d8B0bBD45l1AAFb conectado
+# [+] Rl6bepm1UEB8MzOtAAFd conectado
+# [+] LqrtYiQCpVeHYBIdAAFf conectado
+# [ROOM] Host_5 creó sala VJ2ZG
+# [ROOM] Player_1 se unió a sala VJ2ZG
+# [ROOM] Player_2 se unió a sala VJ2ZG
+# [ROOM] Player_3 se unió a sala VJ2ZG
+# [ROOM] Player_4 se unió a sala VJ2ZG
+# [GAME] Partida iniciada en sala VJ2ZG
+# Subtest: TC-T2-21: Lamebotas false report
+ok 44 - TC-T2-21: Lamebotas false report
+  ---
+  duration_ms: 7.698791
+  type: 'test'
+  ...
+# [-] 2b1L6ID4E481bfgjAAFX desconectado
+# [-] ktPllrc0rYPVtnThAAFZ desconectado
+# [-] 3uuk7d8B0bBD45l1AAFb desconectado
+# [-] Rl6bepm1UEB8MzOtAAFd desconectado
+# [-] LqrtYiQCpVeHYBIdAAFf desconectado
+# [+] KkK7em6w-Kkds_uSAAFh conectado
+# [+] gGljhHKuheMiX3S3AAFj conectado
+# [+] RCeC_9MQGYI7ArrOAAFl conectado
+# [+] dkh8Xd-7Q9Sp3miBAAFn conectado
+# [ROOM] Host_4 creó sala JHMZT
+# [ROOM] Player_1 se unió a sala JHMZT
+# [ROOM] Player_2 se unió a sala JHMZT
+# [ROOM] Player_3 se unió a sala JHMZT
+# [GAME] Partida iniciada en sala JHMZT
+# [SABOTAGE] Host_4 saboteó zona cocina
+# Subtest: TC-T2-22: Zone sabotage morale loss
+ok 45 - TC-T2-22: Zone sabotage morale loss
+  ---
+  duration_ms: 5.81075
+  type: 'test'
+  ...
+# [-] KkK7em6w-Kkds_uSAAFh desconectado
+# [-] gGljhHKuheMiX3S3AAFj desconectado
+# [-] RCeC_9MQGYI7ArrOAAFl desconectado
+# [-] dkh8Xd-7Q9Sp3miBAAFn desconectado
+# [+] 2mxqC2sKoqi-72UaAAFp conectado
+# [+] EzNCm7Px1Z4kUJcrAAFr conectado
+# [+] 8OxCAz0hz_kx6j59AAFt conectado
+# [+] VkZ1IYLDftN1SOBgAAFv conectado
+# [ROOM] Host_4 creó sala S2AKA
+# [ROOM] Player_1 se unió a sala S2AKA
+# [ROOM] Player_2 se unió a sala S2AKA
+# [ROOM] Player_3 se unió a sala S2AKA
+# [GAME] Partida iniciada en sala S2AKA
+# Subtest: TC-T2-23: Door lockout expiration
+ok 46 - TC-T2-23: Door lockout expiration
+  ---
+  duration_ms: 106.248167
+  type: 'test'
+  ...
+# [-] 2mxqC2sKoqi-72UaAAFp desconectado
+# [-] EzNCm7Px1Z4kUJcrAAFr desconectado
+# [-] 8OxCAz0hz_kx6j59AAFt desconectado
+# [-] VkZ1IYLDftN1SOBgAAFv desconectado
+# [+] FVj_oiVA2_ozsxeHAAFx conectado
+# [+] H9zJODx6rLoZ7P0yAAFz conectado
+# [+] XwZIl7KPTt5kSa5QAAF1 conectado
+# [+] 56xwLLg9JgZEfIlFAAF3 conectado
+# [ROOM] Host_4 creó sala 33DWU
+# [ROOM] Player_1 se unió a sala 33DWU
+# [ROOM] Player_2 se unió a sala 33DWU
+# [ROOM] Player_3 se unió a sala 33DWU
+# [GAME] Partida iniciada en sala 33DWU
+# [SABOTAGE] Player_3 saboteó zona cocina
+# (node:93836) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/luisdeleon/AIWorkspace/games/ofichaos/client/src/systems/ui.js is not specified and it doesn't parse as CommonJS.
+# Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+# To eliminate this warning, add "type": "module" to /Users/luisdeleon/AIWorkspace/games/ofichaos/package.json.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: TC-T2-24: Report sabotage action
+ok 47 - TC-T2-24: Report sabotage action
+  ---
+  duration_ms: 11.110375
+  type: 'test'
+  ...
+# Subtest: TC-T3-01: HUD responsive adjustments layout math
+ok 48 - TC-T3-01: HUD responsive adjustments layout math
+  ---
+  duration_ms: 5.662875
+  type: 'test'
+  ...
+# Subtest: TC-T3-03: Interactive task overlays panel verification
+ok 49 - TC-T3-03: Interactive task overlays panel verification
+  ---
+  duration_ms: 1.156209
+  type: 'test'
+  ...
+# [-] FVj_oiVA2_ozsxeHAAFx desconectado
+# [-] H9zJODx6rLoZ7P0yAAFz desconectado
+# [-] XwZIl7KPTt5kSa5QAAF1 desconectado
+# [-] 56xwLLg9JgZEfIlFAAF3 desconectado
+# [+] LEcW0e8DuixvorkjAAF5 conectado
+# [+] WJYUoXduth9M9LfjAAF7 conectado
+# [+] dpJXmfbdi7yr7zcxAAF9 conectado
+# [+] amkAVMwJPVTpU8D4AAF_ conectado
+# [ROOM] Host_4 creó sala A6GVQ
+# [ROOM] Player_1 se unió a sala A6GVQ
+# [ROOM] Player_2 se unió a sala A6GVQ
+# [ROOM] Player_3 se unió a sala A6GVQ
+# [GAME] Partida iniciada en sala A6GVQ
+# [-] LEcW0e8DuixvorkjAAF5 desconectado
+# Subtest: TC-T4-01: Mid-game host migration
+ok 50 - TC-T4-01: Mid-game host migration
+  ---
+  duration_ms: 7.870042
+  type: 'test'
+  ...
+# [-] WJYUoXduth9M9LfjAAF7 desconectado
+# [-] dpJXmfbdi7yr7zcxAAF9 desconectado
+# [-] amkAVMwJPVTpU8D4AAF_ desconectado
+# [+] QUq2bd5eAbjI7Uv9AAGB conectado
+# [+] rHxQTEUWrbyVS6pOAAGD conectado
+# [+] aCt1moso6xe7HR3MAAGF conectado
+# [+] Zw3YoVjOoVniQAuQAAGH conectado
+# [ROOM] Host_4 creó sala 3N76E
+# [ROOM] Player_1 se unió a sala 3N76E
+# [ROOM] Player_2 se unió a sala 3N76E
+# [ROOM] Player_3 se unió a sala 3N76E
+# [GAME] Partida iniciada en sala 3N76E
+# [Anti-Cheat] Movimiento rechazado para Host_4. Distancia: 1220.7, Máx permitida: 15.0, dt: 0.000s
+# Subtest: TC-T4-02: Anti-Cheat: Speed checking (Velocity limit)
+ok 51 - TC-T4-02: Anti-Cheat: Speed checking (Velocity limit)
+  ---
+  duration_ms: 106.08425
+  type: 'test'
+  ...
+# [-] QUq2bd5eAbjI7Uv9AAGB desconectado
+# [-] rHxQTEUWrbyVS6pOAAGD desconectado
+# [-] aCt1moso6xe7HR3MAAGF desconectado
+# [-] Zw3YoVjOoVniQAuQAAGH desconectado
+# [+] 6U5VF3b01eQCCkloAAGJ conectado
+# [+] g8bAVyMz3SyEcU_YAAGL conectado
+# [+] _DkZzIKm_-3wlcdeAAGN conectado
+# [+] nT6DPrdvQ10oPgEvAAGP conectado
+# [ROOM] Host_4 creó sala V7NPD
+# [ROOM] Player_1 se unió a sala V7NPD
+# [ROOM] Player_2 se unió a sala V7NPD
+# [ROOM] Player_3 se unió a sala V7NPD
+# [GAME] Partida iniciada en sala V7NPD
+# Subtest: TC-T4-05: Anti-Cheat: Task distance validation
+ok 52 - TC-T4-05: Anti-Cheat: Task distance validation
+  ---
+  duration_ms: 7.974167
+  type: 'test'
+  ...
+# [-] 6U5VF3b01eQCCkloAAGJ desconectado
+# [-] g8bAVyMz3SyEcU_YAAGL desconectado
+# [-] _DkZzIKm_-3wlcdeAAGN desconectado
+# [-] nT6DPrdvQ10oPgEvAAGP desconectado
+# [+] tYRueNgmrPj7T3dZAAGR conectado
+# [+] 956QMWv25CoT4b4zAAGT conectado
+# [+] ek0KX63F3JsIecUiAAGV conectado
+# [+] p981OX8MAb9ivIqeAAGX conectado
+# [ROOM] Host_4 creó sala HRYCL
+# [ROOM] Player_1 se unió a sala HRYCL
+# [ROOM] Player_2 se unió a sala HRYCL
+# [ROOM] Player_3 se unió a sala HRYCL
+# [GAME] Partida iniciada en sala HRYCL
+# Subtest: TC-T4-04: Sanctions enforcement: movement lock & ability block
+ok 53 - TC-T4-04: Sanctions enforcement: movement lock & ability block
+  ---
+  duration_ms: 106.116
+  type: 'test'
+  ...
+# [-] tYRueNgmrPj7T3dZAAGR desconectado
+# [-] 956QMWv25CoT4b4zAAGT desconectado
+# [-] ek0KX63F3JsIecUiAAGV desconectado
+# [-] p981OX8MAb9ivIqeAAGX desconectado
+1..53
+# tests 53
+# suites 0
+# pass 52
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2295.930125

@@ -223,5 +223,12 @@ PORT=3456 npm run dev  # puerto 3000 suele estar ocupado por Hermes
 8. **Objetivos secundarios:** Ya se verifican en estado/puntos, pero algunas metas siguen simplificadas
 9. **Sabotajes del lamebotas:** `fakeTask`, `falseReport`, `blockTask` ya tienen eventos socket; falta balance fino con partidas humanas
 10. **Reportar sabotaje:** Ya existe evento/botón; falta pulir UI de evidencia y distancia por tipo de sabotaje
+11. **UI/HUD responsive incompleto:** en viewports bajos el `GameScene` todavía puede mostrar recortes/traslapes por la combinación de cámara, zoom y overlays fijos
+
+### Workaround actual para tareas
+- Click cerca de una zona con task
+- Tecla `E` para abrir la task cercana
+- Botón azul `🛠` para abrir la task cercana
+- En viewport bajo el rango de interacción es más permisivo, pero esto es un workaround, no la solución final del layout
 
 ---

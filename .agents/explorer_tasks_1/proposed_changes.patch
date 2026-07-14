@@ -1,0 +1,287 @@
+diff --git a/client/src/scenes/GameScene.js b/client/src/scenes/GameScene.js
+index 9ea4b20..d830f30 100644
+--- a/client/src/scenes/GameScene.js
++++ b/client/src/scenes/GameScene.js
+@@ -843,83 +843,186 @@ export class GameScene extends Phaser.Scene {
+     let stepBtn = null;
+     let progress = 0;
+ 
+-    if (task.type === 'progress') {
++    // Custom Mini-game elements list
++    const customElements = [];
++    let cleanupFn = null;
++
++    if (task.id === 'cafe') {
++      // Reaction Test Mini-game: moving slider back and forth on a horizontal bar.
++      const barBg = this.add.rectangle(panelX, panelY, 240, 20, 0x334155);
++      const successZone = this.add.rectangle(panelX, panelY, 40, 20, 0x22c55e);
++      const slider = this.add.rectangle(panelX - 120, panelY, 8, 28, 0xffffff);
++      
++      customElements.push(barBg, successZone, slider);
++
++      const sliderTween = this.tweens.add({
++        targets: slider,
++        x: panelX + 120,
++        duration: 1000,
++        yoyo: true,
++        repeat: -1,
++        ease: 'Linear'
++      });
++
++      clickBtn = createButton(this, panelX, panelY + 50, '¡DETENER!', () => {
++        const halfSuccess = 20; // 40px width success zone, so +/-20px from center
++        if (Math.abs(slider.x - panelX) <= halfSuccess) {
++          sliderTween.stop();
++          net.completeTask(task.id);
++          this.closeTaskPanel();
++        } else {
++          this.showFloatingText('¡Fallaste! Intenta de nuevo', 0xef4444);
++          this.tweens.add({
++            targets: slider,
++            alpha: 0.2,
++            duration: 80,
++            yoyo: true,
++            repeat: 2
++          });
++        }
++      }, { width: 140, height: 40, bgColor: 0x16a34a, fontSize: '15px' });
++
++      closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
++        sliderTween.stop();
++        this.closeTaskPanel();
++      }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
++
++    } else if (task.id === 'archivos') {
++      // Ordenar Archivos Mini-game: 4 buttons in a randomized layout to click in ascending order (1->2->3->4).
++      let expected = 1;
++      const numButtons = [];
++      const positions = [
++        { x: panelX - 60, y: panelY - 15 },
++        { x: panelX + 60, y: panelY - 15 },
++        { x: panelX - 60, y: panelY + 45 },
++        { x: panelX + 60, y: panelY + 45 }
++      ];
++      const shuffledPositions = [...positions].sort(() => Math.random() - 0.5);
++
++      const numValues = [1, 2, 3, 4];
++      numValues.forEach((num, idx) => {
++        const pos = shuffledPositions[idx];
++        const bg = this.add.rectangle(pos.x, pos.y, 50, 50, 0x334155).setInteractive({ useHandCursor: true });
++        bg.setStrokeStyle(2, 0xffffff, 0.5);
++        const label = this.add.text(pos.x, pos.y, num.toString(), { fontSize: '20px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5);
++        
++        bg.on('pointerover', () => { if (expected <= num) bg.setFillStyle(0x475569); });
++        bg.on('pointerout', () => { if (expected <= num) bg.setFillStyle(0x334155); });
++        
++        bg.on('pointerdown', () => {
++          if (num === expected) {
++            bg.setFillStyle(0x16a34a);
++            bg.disableInteractive();
++            expected++;
++            if (expected > 4) {
++              net.completeTask(task.id);
++              this.closeTaskPanel();
++            }
++          } else {
++            this.showFloatingText('¡Orden incorrecto! Empezando de nuevo', 0xef4444);
++            expected = 1;
++            numButtons.forEach((b) => {
++              b.bg.setFillStyle(0x334155);
++              b.bg.setInteractive({ useHandCursor: true });
++            });
++          }
++        });
++        
++        numButtons.push({ bg, label });
++        customElements.push(bg, label);
++      });
++
++      closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
++        this.closeTaskPanel();
++      }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
++
++    } else if (task.id === 'wifi' || task.id === 'correos') {
++      // Arreglar WiFi / Cables Mini-game: 4 colored nodes left to drag/connect to right matched colored nodes.
++      const colors = [
++        { name: 'red', val: 0xef4444 },
++        { name: 'yellow', val: 0xf59e0b },
++        { name: 'green', val: 0x10b981 },
++        { name: 'blue', val: 0x3b82f6 }
++      ];
++      const rightColors = [...colors].sort(() => Math.random() - 0.5);
++      
++      const linesGraphics = this.add.graphics();
++      customElements.push(linesGraphics);
++
++      const leftCircles = [];
++      const rightCircles = [];
++      const connections = [];
++      let activeStartNode = null;
++
++      colors.forEach((color, idx) => {
++        const y = panelY - 60 + idx * 40;
++        const x = panelX - 110;
++        const circle = this.add.circle(x, y, 10, color.val).setInteractive({ useHandCursor: true });
++        circle.setStrokeStyle(2, 0xffffff);
++        circle.colorData = color;
++        
++        circle.on('pointerdown', () => {
++          if (connections.some(c => c.colorName === color.name)) return;
++          activeStartNode = circle;
++        });
++        leftCircles.push(circle);
++        customElements.push(circle);
++      });
++
++      rightColors.forEach((color, idx) => {
++        const y = panelY - 60 + idx * 40;
++        const x = panelX + 110;
++        const circle = this.add.circle(x, y, 10, color.val).setInteractive({ useHandCursor: true });
++        circle.setStrokeStyle(2, 0xffffff);
++        circle.colorData = color;
++        rightCircles.push(circle);
++        customElements.push(circle);
++      });
++
++      const drawAllLines = (pointer) => {
++        linesGraphics.clear();
++        connections.forEach(c => {
++          linesGraphics.lineStyle(4, c.colorVal, 1);
++          linesGraphics.lineBetween(c.startX, c.startY, c.endX, c.endY);
++        });
++        if (activeStartNode && pointer) {
++          linesGraphics.lineStyle(4, activeStartNode.colorData.val, 0.7);
++          linesGraphics.lineBetween(activeStartNode.x, activeStartNode.y, pointer.x, pointer.y);
++        }
++      };
++
++      const onPointerMove = (pointer) => {
++        if (!activeStartNode) return;
++        drawAllLines(pointer);
++      };
++
++      const onPointerUp = (pointer) => {
++        if (!activeStartNode) return;
++        
++        let matched = false;
++        for (const rc of rightCircles) {
++          const dist = Phaser.Math.Distance.Between(pointer.x, pointer.y, rc.x, rc.y);
++          if (dist < 25) {
++            if (rc.colorData.name === activeStartNode.colorData.name) {
++              connections.push({
++                colorName: activeStartNode.colorData.name,
++                colorVal: activeStartNode.colorData.val,
++                startX: activeStartNode.x,
++                startY: activeStartNode.y,
++                endX: rc.x,
++                endY: rc.y
++              });
++              matched = true;
++              activeStartNode.disableInteractive();
++              rc.disableInteractive();
++              
++              if (connections.length === 4) {
++                net.completeTask(task.id);
++                this.closeTaskPanel();
++              }
++            }
++            break;
++          }
++        }
++        
++        activeStartNode = null;
++        drawAllLines(null);
++      };
++
++      this.input.on('pointermove', onPointerMove);
++      this.input.on('pointerup', onPointerUp);
++
++      cleanupFn = () => {
++        this.input.off('pointermove', onPointerMove);
++        this.input.off('pointerup', onPointerUp);
++      };
++
++      closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
++        this.closeTaskPanel();
++      }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
++
++    } else if (task.type === 'progress') {
+       const barW = panelW - 50;
+       progressBar = this.add.rectangle(panelX, panelY, barW, 30, 0x334155);
+       progressFill = this.add.rectangle(panelX - barW / 2, panelY, 0, 30, 0x4ade80).setOrigin(0, 0.5);
+ 
+-      // Simular progresoAnimado
+       this.time.addEvent({
+         delay: 50,
+         repeat: task.duration / 50,
+@@ -936,7 +1039,7 @@ export class GameScene extends Phaser.Scene {
+       closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
+         this.closeTaskPanel();
+       }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
+     } else if (task.type === 'click') {
+       let clicks = 0;
+       clickText = createText(this, panelX, panelY, `Clicks: 0/10`, { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
+       clickBtn = createButton(this, panelX, panelY + 60, 'CLICK', () => {
+@@ -966,13 +1069,15 @@ export class GameScene extends Phaser.Scene {
+         panel, title, desc, 
+         closeBtn?.bg, closeBtn?.label, 
+         progressBar, progressFill,
+         clickText, clickBtn?.bg, clickBtn?.label,
+-        stepText, stepBtn?.bg, stepBtn?.label
++        stepText, stepBtn?.bg, stepBtn?.label,
++        ...customElements
+       ].filter(Boolean),
+       progressBar,
+       progressFill,
+       closeBtn,
+       clickText,
+       clickBtn,
+       stepText,
+-      stepBtn
++      stepBtn,
++      cleanup: cleanupFn
+     };
+ 
+     this.activeTaskPanel.elements.forEach((el) => el.setScrollFactor?.(0));
+@@ -980,6 +1085,9 @@ export class GameScene extends Phaser.Scene {
+ 
+   closeTaskPanel() {
+     if (!this.activeTaskPanel) return;
++    if (this.activeTaskPanel.cleanup) {
++      this.activeTaskPanel.cleanup();
++    }
+     for (const el of this.activeTaskPanel.elements) {
+       if (el && el.destroy) el.destroy();
+     }
+diff --git a/server/roomManager.js b/server/roomManager.js
+index c6b9fde..a54b38d 100644
+--- a/server/roomManager.js
++++ b/server/roomManager.js
+@@ -1,6 +1,7 @@
+ // roomManager.js — Gestión de salas privadas con códigos
+ 
+ const { startGame, tickGame, startMeeting, startVoting, castVote, endVoting, updateSecondaryObjectives } = require('./gameState');
++const { ZONES } = require('./tasks');
+ 
+ const rooms = {}; // roomCode -> room
+ 
+@@ -156,6 +157,18 @@ function completeTask(code, playerId, taskId) {
+   const p = room.players[playerId];
+   if (!p) return { error: 'Jugador no encontrado' };
+   if (p.burnoutUntil && Date.now() < p.burnoutUntil) return { error: 'En burnout' };
++
++  if (task.zone) {
++    const zone = ZONES.find((z) => z.id === task.zone);
++    if (zone) {
++      const zoneCenterX = zone.x + zone.w / 2;
++      const zoneCenterY = zone.y + zone.h / 2;
++      const dist = Math.hypot(p.x - zoneCenterX, p.y - zoneCenterY);
++      const THRESHOLD = 180; // server tolerance (approx 170px + leeway)
++      if (dist > THRESHOLD) {
++        return { error: 'Demasiado lejos de la tarea' };
++      }
++    }
++  }
+ 
+   task.completed = true;
+   task.completedBy = playerId;

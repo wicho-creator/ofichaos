@@ -1,12 +1,13 @@
 # OfiChaos — Handoff para siguiente agente
 
 ## Estado actual
-- **MVP completo y deployado** en https://ofichaos.onrender.com
+- **MVP jugable y deployado** en https://ofichaos.onrender.com
 - **Repo público:** https://github.com/wicho-creator/ofichaos
 - **Carpeta local:** `/home/nas/AIWorkspace/games/ofichaos`
 - **Stack:** Phaser 3.80 + Node.js + Express + Socket.IO
 - **Deploy:** Render.com free tier (oregon), auto-deploy desde `main`
-- **Verificado:** smoke test 4 clientes WebSocket en producción (PASS)
+- **Verificado:** smoke test multi-cliente en producción (PASS)
+- **Ojo:** la UI/HUD del `GameScene` sigue teniendo problemas responsivos en viewports bajos; está mejor que al inicio, pero **NO está resuelto del todo**.
 
 ## Documentación del proyecto
 - `README.md` — instalación, cómo jugar, roles, mapa, pendientes v2
@@ -29,22 +30,22 @@ git add -A && git commit -m "cambio" && git push origin main
 # Render auto-deploya en ~30 seg
 ```
 
-## Limitaciones conocidas (prioridades para v2)
+## Limitaciones conocidas / foco pendiente
 1. Sin persistencia (salas se pierden al reiniciar servidor)
 2. Free tier sleep (Render duerme tras 15 min inactivo)
-3. Sprites placeholder (círculos, no pixel art)
+3. Sprites placeholder (mejorados, pero todavía no son arte final)
 4. Minijuegos simples (barra de progreso, clicks)
-5. Cámara fija (no sigue al jugador)
+5. **UI/HUD responsivo incompleto:** en pantallas bajas siguen apareciendo recortes/traslapes del HUD sobre el mapa o bordes del viewport
 6. Sin colisiones con mobiliario
 7. Sistema de puntos simplificado
-8. Objetivos secundarios no se verifican automáticamente
-9. Sabotajes del lamebotas NO implementados (fakeTask, falseReport, blockTask)
-10. Reportar sabotaje del empleado NO implementado
+8. Objetivos secundarios ya se verifican, pero siguen simplificados
+9. Sabotajes del lamebotas ya existen, pero falta pulido/balance
+10. Reportar sabotaje del empleado ya existe, pero la UX visual sigue verde
 
-## Top 3 prioridades v2
-1. **Implementar sabotajes del lamebotas** — fakeTask, falseReport, blockTask tienen definición en `roles.js` pero no eventos socket ni botones en el cliente
-2. **Verificación de objetivos secundarios** — se asignan 8 posibles pero nunca se comprueba cumplimiento para puntos
-3. **Cámara que sigue al jugador** + zoom — estructural, cambia la UX completa del GameScene
+## Top 3 prioridades reales al retomar
+1. **Arreglar UI/HUD responsive del GameScene** — el problema principal actual; revisar layout con `this.scale.width/height`, zoom/cámara y overlays fijos
+2. **Pulir interacción de tasks** — ya existe workaround con tecla `E` y botón azul `🛠`, pero el click/UX todavía no es suficientemente robusto
+3. **Pulido visual general** — pasar de prototipo funcional a UI realmente limpia/mobile-friendly
 
 ## Arquitectura clave
 - **Estado en RAM** — `roomManager.js` mantiene `rooms{}` con todo el estado. No hay DB.
@@ -55,8 +56,22 @@ git add -A && git commit -m "cambio" && git push origin main
 - **Phaser desde CDN** — `https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js`
 - **Socket.IO cliente** — servido por Express desde `/socket.io/socket.io.js`
 
+## Estado específico del bug de UI (importante)
+- El HUD se movió varias veces para sacar traslapes del mapa, pero en producción todavía puede verse mal según el viewport.
+- En pantallas bajas, el combo `camera zoom + overlays fijos + Phaser RESIZE` sigue generando recortes o invasión visual.
+- Se agregó un workaround funcional para tasks:
+  - tecla `E`
+  - botón azul `🛠`
+  - rango de interacción más permisivo en viewport bajo
+- Esto hace el juego más usable, pero **no corrige de raíz** el layout.
+
+## Últimos commits relevantes
+- `571437f` — `fix: compactar hud y acceso a tareas`
+- `1c0b966` — `fix: separar hud del mapa`
+- `449eb83` — `style: redondear UI estilo juego`
+
 ## Convenciones
 - Commits en español, prefijos: `feat:`, `fix:`, `docs:`, `security:`
 - PORT default 3000, usar 3456 local (Hermes ocupa 3000)
 - Credenciales NUNCA en el repo — solo en `WichosBrain/APIS.md`
-- Smoke test: crear 4 clientes socket.io, sala, `game:start`, verificar roles + tareas + reunión
+- Smoke test: crear 4+ clientes socket.io, sala, `game:start`, verificar roles + tareas + reunión

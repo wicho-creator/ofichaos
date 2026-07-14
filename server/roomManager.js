@@ -1,6 +1,7 @@
 // roomManager.js — Gestión de salas privadas con códigos
 
 const { startGame, tickGame, startMeeting, startVoting, castVote, endVoting, updateSecondaryObjectives } = require('./gameState');
+const { ZONES } = require('./tasks');
 
 const rooms = {}; // roomCode -> room
 
@@ -104,16 +105,49 @@ function movePlayer(code, playerId, x, y) {
   const room = rooms[code];
   if (!room || !room.players[playerId]) return null;
   const p = room.players[playerId];
-  // No permitir movimiento si está en burnout o reunión o suspendido
-  if (room.gameState && room.gameState.phase === 'meeting') return p;
-  if (room.gameState && room.gameState.phase === 'voting') return p;
-  if (p.burnoutUntil && Date.now() < p.burnoutUntil) {
-    // Movimiento lento: reducir desplazamiento a la mitad
-    p.x = x * 0.5 + p.x * 0.5;
-    p.y = y * 0.5 + p.y * 0.5;
+  if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) {
+    return p;
+  }
+  const now = Date.now();
+  if (p.suspendedUntil && now < p.suspendedUntil) return p;
+  if (room.gameState && (room.gameState.phase === 'meeting' || room.gameState.phase === 'voting')) return p;
+
+  const isBurnout = p.burnoutUntil && now < p.burnoutUntil;
+  const baseSpeed = 250;
+  const speed = isBurnout ? baseSpeed * 0.5 : baseSpeed;
+
+  // Validar y limitar límites del mapa
+  const clampedX = Math.max(20, Math.min(1180, x));
+  const clampedY = Math.max(20, Math.min(880, y));
+
+  if (!p.lastMoveTime) {
+    p.lastMoveTime = now;
+    p.x = clampedX;
+    p.y = clampedY;
+    return p;
+  }
+
+  // Limitar el delta de tiempo para evitar teletransporte después de inactividad o lag extremo
+  const maxDt = 0.25;
+  const dt = Math.min((now - p.lastMoveTime) / 1000, maxDt);
+  p.lastMoveTime = now;
+
+  const dist = Math.hypot(clampedX - p.x, clampedY - p.y);
+  const tolerance = 1.2;
+  const maxAllowedDist = speed * dt * tolerance;
+  const minDistBuffer = 15;
+
+  if (!p.bypassSpeedCheck && dist > maxAllowedDist + minDistBuffer) {
+    console.log(`[Anti-Cheat] Movimiento rechazado para ${p.name}. Distancia: ${dist.toFixed(1)}, Máx permitida: ${(maxAllowedDist + minDistBuffer).toFixed(1)}, dt: ${dt.toFixed(3)}s`);
+    return p;
+  }
+
+  if (isBurnout) {
+    p.x = clampedX * 0.5 + p.x * 0.5;
+    p.y = clampedY * 0.5 + p.y * 0.5;
   } else {
-    p.x = x;
-    p.y = y;
+    p.x = clampedX;
+    p.y = clampedY;
   }
   return p;
 }
@@ -121,12 +155,29 @@ function movePlayer(code, playerId, x, y) {
 function completeTask(code, playerId, taskId) {
   const room = rooms[code];
   if (!room || !room.gameState) return { error: 'No hay partida activa' };
+  if (room.gameState.phase !== 'playing') {
+    return { error: 'Acción no permitida en esta fase' };
+  }
   const task = room.gameState.taskStates.find((t) => t.id === taskId);
   if (!task || task.completed) return { error: 'Tarea no disponible' };
   if (task.blockedUntil && Date.now() < task.blockedUntil) return { error: 'Tarea bloqueada temporalmente por sabotaje' };
   const p = room.players[playerId];
   if (!p) return { error: 'Jugador no encontrado' };
+  if (p.role !== 'empleado') return { error: 'Rol no autorizado para completar tareas' };
   if (p.burnoutUntil && Date.now() < p.burnoutUntil) return { error: 'En burnout' };
+
+  if (task.zone) {
+    const zone = ZONES.find((z) => z.id === task.zone);
+    if (zone) {
+      const zoneCenterX = zone.x + zone.w / 2;
+      const zoneCenterY = zone.y + zone.h / 2;
+      const dist = Math.hypot(p.x - zoneCenterX, p.y - zoneCenterY);
+      const THRESHOLD = 180; // server tolerance (approx 170px + leeway)
+      if (dist > THRESHOLD) {
+        return { error: 'Demasiado lejos de la tarea' };
+      }
+    }
+  }
 
   task.completed = true;
   task.completedBy = playerId;

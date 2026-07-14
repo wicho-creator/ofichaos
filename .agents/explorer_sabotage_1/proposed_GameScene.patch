@@ -1,0 +1,142 @@
+diff --git a/client/src/scenes/GameScene.js b/client/src/scenes/GameScene.js
+index c8d839f..f1b2b8d 100644
+--- a/client/src/scenes/GameScene.js
++++ b/client/src/scenes/GameScene.js
+@@ -31,4 +31,8 @@ export class GameScene extends Phaser.Scene {
+     this.cooldownText = null;
+     this.mobileInput = { left: false, right: false, up: false, down: false };
+ 
++    // Sabotage warnings
++    this.sabotageOverlay = null;
++    this.sabotageBanner = null;
++    this.sabotageTween = null;
++
+     // Active task minigame
+     this.activeTaskPanel = null;
+   }
+@@ -99,4 +103,8 @@ export class GameScene extends Phaser.Scene {
+     // Responsividad al redimensionar
+     this.scale.on('resize', this.resize, this);
+     this.events.once('shutdown', () => {
+       this.scale.off('resize', this.resize, this);
++      if (this.sabotageTween) {
++        this.sabotageTween.stop();
++        this.sabotageTween = null;
++      }
+     });
+ 
+     // Listeners socket
+@@ -218,6 +226,23 @@ export class GameScene extends Phaser.Scene {
+   createHUD() {
+     this.hud = this.hud || {};
+ 
++    // Sabotage warning overlay
++    this.sabotageOverlay = this.add.graphics();
++    this.sabotageOverlay.fillStyle(0xef4444, 1);
++    this.sabotageOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
++    this.sabotageOverlay.setScrollFactor(0);
++    this.sabotageOverlay.setDepth(50);
++    this.sabotageOverlay.setAlpha(0);
++    this.sabotageOverlay.setVisible(false);
++
++    // Sabotage warning banner
++    this.sabotageBanner = this.add.text(0, 0, '', {
++      fontSize: '13px',
++      color: '#ffffff',
++      fontStyle: 'bold',
++      backgroundColor: '#ef4444',
++      padding: { x: 12, y: 6 },
++      shadow: { fill: true, blur: 2, color: '#000000', y: 1 }
++    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(101).setVisible(false);
++
+     // 1. Header Panel y Textos
+     this.hud.headerPanel = createPanel(this, 0, 0, 100, 100, 0x0b1220, { strokeColor: 0xfbbf24, strokeAlpha: 0.28, radius: 18 });
+     this.hud.timerText = this.add.text(0, 0, '⏱ 8:00', { fontStyle: 'bold', color: '#fbbf24' }).setOrigin(0.5, 0.5);
+@@ -271,11 +296,17 @@ export class GameScene extends Phaser.Scene {
+     // Asegurar ScrollFactor 0 para evitar que el HUD se desplace con el mapa
+     Object.values(this.hud).forEach((el) => {
+       if (!el) return;
+       if (el.setScrollFactor) {
+         el.setScrollFactor(0);
++        el.setDepth(100);
+       } else if (el.bg) {
+         el.bg.setScrollFactor(0);
+         el.label.setScrollFactor(0);
+         el.hit.setScrollFactor(0);
+         el.shadow.setScrollFactor(0);
++
++        el.bg.setDepth(100);
++        el.label.setDepth(100);
++        el.hit.setDepth(100);
++        el.shadow.setDepth(100);
+       }
+     });
+ 
+@@ -303,4 +334,10 @@ export class GameScene extends Phaser.Scene {
+     if (this.hud && this.hud.headerPanel) {
+       this.repositionHUD(w, h);
+     }
++
++    // Redimensionar overlay de sabotaje
++    if (this.sabotageOverlay) {
++      this.sabotageOverlay.clear();
++      this.sabotageOverlay.fillStyle(0xef4444, 1);
++      this.sabotageOverlay.fillRect(0, 0, w, h);
++    }
+ 
+     // Reposicionar paneles abiertos
+     this.repositionActivePanels(w, h);
+@@ -441,4 +478,8 @@ export class GameScene extends Phaser.Scene {
+       this.hud.cooldownText.setPosition(actionX, actionY + (compact ? 14 : 22));
+       this.hud.cooldownText.setFontSize('10px');
+     }
++
++    if (this.sabotageBanner) {
++      this.sabotageBanner.setPosition(w / 2, headerY + headerH / 2 + 18);
++    }
+   }
+ 
+   // 5. Mobile Pad Controls (D-pad)
+@@ -731,4 +772,39 @@ export class GameScene extends Phaser.Scene {
+       this.cooldownText.setColor(line ? '#fed7aa' : '#bbf7d0');
+     }
++
++    // Actualizar advertencias de sabotaje activo
++    const hasActiveSabotages = gs.activeSabotages && gs.activeSabotages.length > 0;
++    if (hasActiveSabotages) {
++      if (!this.sabotageTween) {
++        this.sabotageOverlay.setVisible(true);
++        this.sabotageOverlay.setAlpha(0);
++        this.sabotageTween = this.tweens.add({
++          targets: this.sabotageOverlay,
++          alpha: 0.28,
++          duration: 900,
++          yoyo: true,
++          repeat: -1
++        });
++      }
++
++      const descriptions = gs.activeSabotages.map((s) => {
++        if (s.type === 'zone') return `Zona: ${s.zoneId.toUpperCase()}`;
++        if (s.type === 'close_door') return `Puerta Cerrada: ${s.zoneId.toUpperCase()}`;
++        if (s.type === 'block_task') return `Tarea Bloqueada: ${s.taskId.toUpperCase()}`;
++        if (s.type === 'false_report') return `Alarma Falsa / Pánico`;
++        return s.type.toUpperCase();
++      }).join(' | ');
++
++      this.sabotageBanner.setText(`⚠ OFICINA SABOTEADA: ${descriptions} ⚠`);
++      this.sabotageBanner.setVisible(true);
++    } else {
++      if (this.sabotageTween) {
++        this.sabotageTween.stop();
++        this.sabotageTween = null;
++      }
++      if (this.sabotageOverlay) {
++        this.sabotageOverlay.setVisible(false);
++        this.sabotageOverlay.setAlpha(0);
++      }
++      if (this.sabotageBanner) {
++        this.sabotageBanner.setVisible(false);
++      }
++    }
+   }

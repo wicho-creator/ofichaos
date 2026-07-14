@@ -1,8 +1,8 @@
 // ui.js — Componentes visuales estilo juego para OfiChaos
 
 export function createButton(scene, x, y, text, callback, style = {}) {
-  const width = style.width || 200;
-  const height = style.height || 50;
+  let width = style.width || 200;
+  let height = style.height || 50;
   const bgColor = style.bgColor || 0x4c1d95;
   const bgHover = style.bgHover || 0x6d28d9;
   const textColor = style.textColor || '#ffffff';
@@ -10,21 +10,7 @@ export function createButton(scene, x, y, text, callback, style = {}) {
   const radius = style.radius || 16;
 
   const shadow = scene.add.graphics();
-  shadow.fillStyle(0x000000, 0.28);
-  shadow.fillRoundedRect(x - width / 2 + 4, y - height / 2 + 6, width, height, radius);
-
   const bg = scene.add.graphics();
-  const draw = (color, lift = 0) => {
-    bg.clear();
-    bg.fillStyle(color, 1);
-    bg.fillRoundedRect(x - width / 2, y - height / 2 - lift, width, height, radius);
-    bg.lineStyle(3, 0xffffff, 0.72);
-    bg.strokeRoundedRect(x - width / 2, y - height / 2 - lift, width, height, radius);
-    bg.lineStyle(2, 0x000000, 0.22);
-    bg.strokeRoundedRect(x - width / 2 + 4, y - height / 2 + 4 - lift, width - 8, height - 8, Math.max(8, radius - 4));
-  };
-  draw(bgColor);
-
   const hit = scene.add.zone(x, y, width, height).setOrigin(0.5).setInteractive({ useHandCursor: true });
   const label = scene.add.text(x, y - 1, text, {
     fontSize,
@@ -33,8 +19,60 @@ export function createButton(scene, x, y, text, callback, style = {}) {
     align: 'center'
   }).setOrigin(0.5);
 
-  hit.on('pointerover', () => { draw(bgHover, 2); label.y = y - 3; });
-  hit.on('pointerout', () => { draw(bgColor, 0); label.y = y - 1; });
+  const drawShadow = (w, h) => {
+    shadow.clear();
+    shadow.fillStyle(0x000000, 0.28);
+    shadow.fillRoundedRect(-w / 2 + 4, -h / 2 + 6, w, h, radius);
+  };
+
+  const drawBg = (color, w, h, lift = 0) => {
+    bg.clear();
+    bg.fillStyle(color, 1);
+    bg.fillRoundedRect(-w / 2, -h / 2 - lift, w, h, radius);
+    bg.lineStyle(3, 0xffffff, 0.72);
+    bg.strokeRoundedRect(-w / 2, -h / 2 - lift, w, h, radius);
+    bg.lineStyle(2, 0x000000, 0.22);
+    bg.strokeRoundedRect(-w / 2 + 4, -h / 2 + 4 - lift, w - 8, h - 8, Math.max(8, radius - 4));
+  };
+
+  const setPositionAndSize = (px, py, pw, ph) => {
+    width = pw !== undefined ? pw : width;
+    height = ph !== undefined ? ph : height;
+
+    shadow.x = px;
+    shadow.y = py;
+    drawShadow(width, height);
+
+    bg.x = px;
+    bg.y = py;
+    drawBg(bgColor, width, height, 0);
+
+    if (hit.setPosition) {
+      hit.setPosition(px, py);
+    } else {
+      hit.x = px;
+      hit.y = py;
+    }
+
+    if (hit.setSize) {
+      hit.setSize(width, height);
+    } else {
+      hit.w = width;
+      hit.h = height;
+    }
+
+    if (label.setPosition) {
+      label.setPosition(px, py - 1);
+    } else {
+      label.x = px;
+      label.y = py - 1;
+    }
+  };
+
+  setPositionAndSize(x, y, width, height);
+
+  hit.on('pointerover', () => { drawBg(bgHover, width, height, 2); label.y = hit.y - 3; });
+  hit.on('pointerout', () => { drawBg(bgColor, width, height, 0); label.y = hit.y - 1; });
   hit.on('pointerdown', callback);
 
   const destroyGraphics = bg.destroy.bind(bg);
@@ -44,20 +82,28 @@ export function createButton(scene, x, y, text, callback, style = {}) {
     destroyGraphics();
   };
 
-  return { bg, label, hit, shadow };
+  return { bg, label, hit, shadow, setPositionAndSize };
 }
 
 export function createPanel(scene, x, y, w, h, bgColor = 0x1e293b, style = {}) {
   const radius = style.radius || 22;
   const panel = scene.add.graphics();
-  panel.fillStyle(0x000000, 0.22);
-  panel.fillRoundedRect(x - w / 2 + 6, y - h / 2 + 8, w, h, radius);
-  panel.fillStyle(bgColor, style.alpha ?? 0.92);
-  panel.fillRoundedRect(x - w / 2, y - h / 2, w, h, radius);
-  panel.lineStyle(style.strokeWidth || 3, style.strokeColor || 0xfbbf24, style.strokeAlpha ?? 0.38);
-  panel.strokeRoundedRect(x - w / 2, y - h / 2, w, h, radius);
-  panel.lineStyle(2, 0xffffff, 0.12);
-  panel.strokeRoundedRect(x - w / 2 + 6, y - h / 2 + 6, w - 12, h - 12, Math.max(10, radius - 6));
+
+  panel.drawPanel = (px, py, pw, ph) => {
+    panel.clear();
+    panel.x = px;
+    panel.y = py;
+    panel.fillStyle(0x000000, 0.22);
+    panel.fillRoundedRect(-pw / 2 + 6, -ph / 2 + 8, pw, ph, radius);
+    panel.fillStyle(bgColor, style.alpha ?? 0.92);
+    panel.fillRoundedRect(-pw / 2, -ph / 2, pw, ph, radius);
+    panel.lineStyle(style.strokeWidth || 3, style.strokeColor || 0xfbbf24, style.strokeAlpha ?? 0.38);
+    panel.strokeRoundedRect(-pw / 2, -ph / 2, pw, ph, radius);
+    panel.lineStyle(2, 0xffffff, 0.12);
+    panel.strokeRoundedRect(-pw / 2 + 6, -ph / 2 + 6, pw - 12, ph - 12, Math.max(10, radius - 6));
+  };
+
+  panel.drawPanel(x, y, w, h);
   return panel;
 }
 
