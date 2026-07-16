@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "node server/index.js",
     "start": "node server/index.js",
-    "test": "node --test tests/e2e.test.js && node --test tests/victory_verification.test.js && node --test tests/client-lifecycle.test.mjs tests/onboarding.test.mjs tests/theme-contract.test.mjs tests/world-layout.test.mjs",
+    "test": "node --test tests/e2e.test.js && node --test tests/victory_verification.test.js && node --test tests/socket-payloads.test.js tests/client-lifecycle.test.mjs tests/onboarding.test.mjs tests/theme-contract.test.mjs tests/world-layout.test.mjs tests/minigames.test.mjs tests/doors.test.js tests/projections.test.js tests/sabotage-layout.test.mjs tests/task-access.test.js tests/task-sessions.test.js",
     "test:victory": "node --test tests/victory_verification.test.js",
-    "check": "node --check server/*.js && node --check client/src/main.js && node --check client/src/scenes/*.js && node --check client/src/systems/*.js"
+    "check": "node --check server/*.js shared/*.js && node --check client/src/main.js && node --check client/src/scenes/*.js && node --check client/src/systems/*.js"
   },
   "dependencies": {
     "express": "^4.19.2",

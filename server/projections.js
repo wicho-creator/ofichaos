@@ -18,6 +18,16 @@ function publicPlayer(player, gameState) {
   };
 }
 
+function publicSabotages(gameState) {
+  return gameState.activeSabotages.map(sabotageState => ({
+    type: sabotageState.type,
+    doorId: sabotageState.doorId,
+    zoneId: sabotageState.zoneId,
+    taskId: sabotageState.taskId,
+    expires: sabotageState.expires
+  }));
+}
+
 function projectPublic(room) {
   if (!room || !room.gameState) return null;
   const gameState = room.gameState;
@@ -37,12 +47,7 @@ function projectPublic(room) {
     players: Object.values(room.players).map(player => publicPlayer(player, gameState)),
     meetingTimer: gameState.meetingTimer,
     votingTimer: gameState.votingTimer,
-    activeSabotages: gameState.activeSabotages.map(sabotageState => ({
-      type: sabotageState.type,
-      zoneId: sabotageState.zoneId,
-      taskId: sabotageState.taskId,
-      expires: sabotageState.expires
-    }))
+    activeSabotages: publicSabotages(gameState)
   };
 }
 
@@ -69,7 +74,8 @@ function projectTick(room) {
   return {
     timeRemaining: room.gameState.timeRemaining,
     taskPercent: taskPercent(room),
-    players
+    players,
+    activeSabotages: publicSabotages(room.gameState)
   };
 }
 

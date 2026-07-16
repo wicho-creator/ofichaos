@@ -1,7 +1,7 @@
 // gameState.js — Estado del juego, moral, temporizadores y condiciones de victoria
 
 const { assignRoles } = require('./roles');
-const { initTaskStates, getCompletionPercent, MAP_WIDTH, MAP_HEIGHT, ZONES } = require('./tasks');
+const { initTaskStates, getCompletionPercent, SPAWN_POINTS, ZONES } = require('./tasks');
 const { cleanExpiredSabotages } = require('./sabotage');
 
 const GAME_DURATION = 8 * 60 * 1000; // 8 minutos
@@ -50,14 +50,15 @@ function startGame(room) {
   room.gameState = createGameState(playerIds);
   room.gameState.roleAssignments = assignRoles(playerIds);
 
-  for (const pid of playerIds) {
+  for (const [index, pid] of playerIds.entries()) {
     const assignment = room.gameState.roleAssignments[pid];
+    const spawn = SPAWN_POINTS[index % SPAWN_POINTS.length];
     room.players[pid].role = assignment.role;
     room.players[pid].secondaryObjective = assignment.secondaryObjective;
     room.players[pid].secondaryObjectiveText = assignment.secondaryObjectiveText;
     room.players[pid].morale = 100;
-    room.players[pid].x = 100 + Math.random() * (MAP_WIDTH - 200);
-    room.players[pid].y = 100 + Math.random() * (MAP_HEIGHT - 200);
+    room.players[pid].x = spawn.x;
+    room.players[pid].y = spawn.y;
     room.players[pid].vx = 0;
     room.players[pid].vy = 0;
     room.players[pid].burnoutUntil = 0;
@@ -65,6 +66,7 @@ function startGame(room) {
     room.players[pid].tasksCompleted = 0;
     room.players[pid].completedTaskZones = [];
     room.players[pid].secondaryObjectiveDone = false;
+    room.players[pid].lastMoveTime = Date.now();
     room.gameState.points[pid] = 0;
     room.gameState.secondaryObjectiveStatus[pid] = false;
     room.gameState.sabotageStats[pid] = { zone: 0, fakeTask: 0, falseReport: 0, blockTask: 0, lowerMorale: 0, extraTask: 0, closeDoor: 0 };
@@ -95,6 +97,7 @@ function tickGame(room) {
   for (const pid of Object.keys(room.players)) {
     const p = room.players[pid];
     if (p.morale <= 0 && !gs.burnedOutPlayers.has(pid)) {
+      delete p.taskSession;
       p.burnoutUntil = now + BURNOUT_DURATION;
       gs.burnedOutPlayers.add(pid);
       p.hasBurnedOut = true;
@@ -111,6 +114,7 @@ function tickGame(room) {
 
   const result = checkWinConditions(room);
   if (result) {
+    for (const player of Object.values(room.players)) delete player.taskSession;
     gs.phase = 'ended';
     gs.winners = result;
     calculatePoints(room, result);
@@ -135,14 +139,11 @@ function isSecondaryObjectiveComplete(room, pid) {
   if (!gs || !p) return false;
   const objective = p.secondaryObjective;
   let done = false;
-  if (objective === 'tasks_uninterrupted') done = (p.tasksCompleted || 0) >= 3;
-  else if (objective === 'meeting_no_votes') done = !!p.meetingNoVotes;
+  if (objective === 'meeting_no_votes') done = !!p.meetingNoVotes;
   else if (objective === 'cause_sanction') done = !!p.causedSanction;
   else if (objective === 'kitchen_task') done = (p.completedTaskZones || []).includes('cocina');
   else if (objective === 'no_burnout') done = !p.hasBurnedOut;
   else if (objective === 'accuse_correct') done = !!p.accusedCorrectly;
-  else if (objective === 'help_coworker') done = (p.tasksCompleted || 0) >= 2;
-  else if (objective === 'avoid_boss') done = !!p.avoidedBoss;
   p.secondaryObjectiveDone = done;
   gs.secondaryObjectiveStatus[pid] = done;
   return done;
@@ -212,8 +213,6 @@ function calculatePoints(room, result) {
 
     if (p.role === 'empleado') {
       pts += p.tasksCompleted * 10;
-      // Objetivo secundario simplificado
-      if (isSecondaryObjectiveComplete(room, pid)) pts += 20;
       if (result.winners === 'empleados') {
         pts += 50; // bonus victoria
       }
@@ -225,9 +224,9 @@ function calculatePoints(room, result) {
       pts += (gs.sabotageStats[pid]?.falseReport || 0) * 15;
       pts += (gs.sabotageStats[pid]?.blockTask || 0) * 10;
       pts += (gs.sabotageStats[pid]?.fakeTask || 0) * 10;
-      if (isSecondaryObjectiveComplete(room, pid)) pts += 20;
       if (result.winners === 'jefe' && p.sanctions < 2) pts += 50;
     }
+    if (isSecondaryObjectiveComplete(room, pid)) pts += 20;
 
     gs.points[pid] = pts;
   }
@@ -271,6 +270,8 @@ function startVoting(room) {
 function castVote(room, voterId, targetId) {
   const gs = room.gameState;
   if (gs.phase !== 'voting') return false;
+  if (!room.players?.[voterId]) return false;
+  if (Object.prototype.hasOwnProperty.call(gs.votes, voterId)) return false;
   if (targetId !== 'skip' && (!room.players || !room.players[targetId])) return false;
   gs.votes[voterId] = targetId;
   return true;
@@ -286,7 +287,7 @@ function endVoting(room) {
   // Contar votos
   const tally = {};
   for (const [voter, target] of Object.entries(gs.votes)) {
-    if (target && target !== 'skip') {
+    if (room.players[voter] && room.players[target] && target !== 'skip') {
       tally[target] = (tally[target] || 0) + 1;
     }
   }
@@ -335,9 +336,9 @@ function endVoting(room) {
       room.players[pid].accusedCorrectly = true;
     }
   }
-  if (sanctioned) {
+  if (sanctionType) {
     for (const [voterId, target] of Object.entries(gs.votes)) {
-      if (target === sanctioned && room.players[voterId]) room.players[voterId].causedSanction = true;
+      if (target === sanctioned && voterId !== sanctioned && room.players[voterId]) room.players[voterId].causedSanction = true;
     }
   }
   updateSecondaryObjectives(room);

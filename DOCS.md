@@ -1,234 +1,77 @@
-# OfiChaos — Documentación Técnica
+# OfiChaos — Documentación técnica
 
-## Resumen del Proyecto
+## Runtime
 
-OfiChaos es un juego multijugador online tipo *Among Us* ambientado en una oficina tóxica y cómica. Desarrollado como MVP con Phaser.js + Node.js + Socket.IO.
+- **Cliente:** Phaser 3.80 en navegador.
+- **Servidor:** Node.js, Express y Socket.IO.
+- **Estado:** salas en RAM.
+- **Producción:** <https://ofichaos.onrender.com>.
+- **Repositorio:** <https://github.com/wicho-creator/ofichaos>.
 
-- **URL producción:** https://ofichaos.onrender.com
-- **Repo:** https://github.com/wicho-creator/ofichaos
-- **Stack:** Phaser 3.80 (frontend) + Node.js/Express/Socket.IO (backend)
-- **Plan:** Render free tier (oregon)
+## Fases
 
----
-
-## Arquitectura
-
-```
-Cliente (Phaser.js en browser)
-  ⇄ WebSocket (Socket.IO)
-    ⇄ Servidor Node.js (Express + Socket.IO)
-        ├── roomManager.js  — salas privadas con código de 5 letras
-        ├── gameState.js    — estado de partida, moral, temporizadores
-        ├── roles.js        — asignación de roles + objetivos secundarios
-        ├── tasks.js        — 5 tareas en 8 zonas del mapa
-        └── sabotage.js     — sabotajes de zona, moral, puertas
+```text
+lobby → playing → meeting → voting → playing
+                   └───────────────→ ended
+playing ───────────────────────────→ ended
 ```
 
-### Estado en memoria
+Movimiento, tareas y habilidades solo se autorizan durante `playing`. Reunión, votación y fin invalidan sesiones de minijuego.
 
-Toda la lógica del juego vive en RAM del servidor. No hay base de datos ni persistencia. Si el servidor reinicia, las salas activas se pierden. Esto es aceptable para el MVP.
+## Trust boundary Socket.IO
 
-### Game loop
+Todo payload cliente se trata como no confiable:
 
-El servidor corre un `setInterval` cada 1 segundo que:
-1. Descuenta el temporizador de partida (8 min)
-2. Limpia sabotajes expirados
-3. Verifica condiciones de burnout (moral ≤ 0)
-4. Verifica condiciones de victoria
-5. Si hay reunión activa, descuenta su timer (60 seg → votación 20 seg)
-6. Broadcastea `game:tick` con tiempo restante, % de tareas y posiciones
+- normalizar antes de leer campos;
+- no desestructurar `null` en la firma del handler;
+- aceptar IDs únicamente si `typeof value === 'string'`;
+- exigir números finitos para coordenadas;
+- aceptar ACK solo si es función;
+- validar rol, fase, cooldown y objetivo antes de mutar estado.
 
----
+### Cliente → servidor
 
-## Flujo de juego
+| Evento | Payload | Regla principal |
+|---|---|---|
+| `room:create` | `{name}` | nombre saneado |
+| `room:join` | `{code, name}` | valida destino antes de abandonar sala actual |
+| `game:start` | — | solo host; no reinicia una partida activa |
+| `player:move` | `{x, y}` | 50 Hz máx.; autoridad física; solo retransmite cambios |
+| `task:start` | `{taskId}` + ACK | acceso completo a estación |
+| `task:action` | `{sessionId, action}` + ACK | token propietario y reducer servidor |
+| `task:complete` | `{taskId}` | compatibilidad fail-closed; nunca completa |
+| `sabotage:zone` | `{zoneId}` | zona allowlisted |
+| `sabotage:extra_task` | `{targetId}` | empleado existente |
+| `sabotage:morale` | `{targetId}` | empleado existente |
+| `sabotage:close_door` | `{doorId}` | puerta exacta cercana |
+| `sabotage:block_task` | `{taskId}` | tarea activa |
+| `sabotage:report` | — | sabotaje reportable y reunión disponible |
+| `meeting:call` | — | reunión disponible |
+| `meeting:chat` | `{message}` | fase y texto limitado |
+| `vote:cast` | `{targetId}` | un voto inmutable por miembro actual; objetivo actual o `skip` |
 
-### 1. Lobby
-- Jugador crea sala → recibe código de 5 letras (ej: `KQKMM`)
-- Otros jugadores se unen con el código
-- Host ve botón "Iniciar partida" cuando hay ≥ 4 jugadores
-- Mínimo 4, máximo 12 jugadores
+### Servidor → cliente
 
-### 2. Inicio de partida
-- `gameState.startGame()` asigna roles:
-  - 1 Jefe (si ≥ 4 jugadores)
-  - 1 Lamebotas (si ≥ 5 jugadores)
-  - Resto: Empleados
-- Cada jugador recibe un objetivo secundario aleatorio (8 posibles)
-- Cada jugador recibe su rol via `game:role` (evento privado)
+- `game:started` / `game:update`: proyección pública.
+- `game:role`: rol y objetivo privados al propietario.
+- `game:private`: cooldowns propios.
+- `game:tick`: posición, moral y estado visible allowlisted.
+- `player:moved`: posición autoritativa; los rechazos se reconcilian solo con el emisor.
+- `task:completed`: `taskId` y nombre visible, sin identidad privada adicional.
+- `meeting:*`, `voting:*`, `game:ended`: transiciones de fase.
 
-### 3. Juego
-- Movimiento: WASD o flechas, throttle 80ms al servidor
-- Click en zona cercana → abre minijuego de tarea
-- 3 tipos de minijuego: progress (barra), click (N clicks), sequence (N pasos)
-- Moral: 100 inicial, baja con sabotajes, sube con tareas
-- Burnout: moral ≤ 0 → 20 seg sin tareas, movimiento lento
+## Minijuegos autoritativos
 
-### 4. Reunión
-- Activada por: botón de emergencia (1x por partida), reporte de sabotaje
-- 60 seg de chat (Socket.IO `meeting:chat`)
-- 20 seg de votación (cada jugador vota por otro o skip)
-- Más votado: sanción (-20 moral, 30 seg sin habilidad)
-- 2 sanciones: suspensión 30 seg
+`shared/minigames.js` expone reducers puros compatibles con navegador y CommonJS. Online, el cliente no aplica progreso optimista: espera el ACK servidor. Controles discretos tienen cadencia mínima; Café usa tiempo servidor; Reporte acredita solo heartbeats continuos y no intervalos retroactivos largos.
 
-### 5. Victoria
-| Quién | Condición |
-|-------|-----------|
-| Empleados | 80% tareas completadas |
-| Jefe | Tiempo acaba y tareas < 80% |
-| Jefe | 50% empleados en burnout |
-| Lamebotas | Jefe gana + no fue sancionado 2 veces |
+## Colisiones e interacción
 
-### 6. Pantalla final
-- Muestra ganadores, razón, puntos por jugador, rol de cada uno
-- Botón "Volver al lobby"
+`shared/world-data.js` es la fuente física única. El servidor valida el segmento completo con el radio real del jugador. Para tareas exige distancia máxima de `170 px` y línea despejada. Una puerta cerrada puede permitir salir a quien quedó atrapado, pero esa excepción de movimiento nunca autoriza interacción.
 
----
+## Proyecciones
 
-## Estructura de archivos
-
-```
-ofichaos/
-├── server/
-│   ├── index.js          — Express + Socket.IO, eventos, game loop
-│   ├── roomManager.js    — Salas, códigos, join/leave, acciones
-│   ├── gameState.js      — startGame, tickGame, meeting, voting, victoria
-│   ├── roles.js          — ROLES, SECONDARY_OBJECTIVES, assignRoles()
-│   ├── tasks.js          — TASKS, ZONES, initTaskStates, getCompletionPercent
-│   └── sabotage.js       — sabotageZone, assignExtraTask, lowerMorale, closeDoor
-├── client/
-│   ├── index.html        — HTML base, carga Phaser + socket.io
-│   └── src/
-│       ├── main.js              — Config de Phaser, plugin DOM
-│       ├── scenes/
-│       │   ├── LobbyScene.js    — Nombre, crear/unirse, lista jugadores, iniciar
-│       │   ├── GameScene.js     — Mapa 2D, movimiento, HUD, tareas, sabotaje
-│       │   ├── MeetingScene.js  — Chat + votación
-│       │   └── EndScene.js      — Resultados finales
-│       └── systems/
-│           ├── player.js        — createPlayerSprite, updatePlayerSprite
-│           ├── tasks.js         — TASKS (mirror del servidor)
-│           ├── ui.js            — createButton, createPanel, createText
-│           └── networking.js    — Wrapper Socket.IO cliente
-├── package.json
-├── .gitignore
-└── README.md
-```
-
----
+`server/projections.js` construye payloads por allowlist. Roles, objetivos y cooldowns no aparecen en jugadores remotos. Los sabotajes públicos contienen solo tipo, objetivo espacial necesario y expiración.
 
 ## Deploy
 
-### Render.com
-- **Tipo:** Web Service (Node.js)
-- **Región:** Oregon
-- **Plan:** Free
-- **Build:** `npm install`
-- **Start:** `node server/index.js`
-- **AutoDeploy:** Sí (cada push a `main` re-deploya)
-- **URL:** https://ofichaos.onrender.com
-- **Service ID:** ver `WichosBrain/APIS.md`
-
-### Comando para deploy manual
-```bash
-cd /home/nas/AIWorkspace/games/ofichaos
-git add -A && git commit -m "cambio" && git push origin main
-# Render auto-deploya en ~30 seg
-```
-
-### Comando para run local
-```bash
-cd /home/nas/AIWorkspace/games/ofichaos
-PORT=3456 npm run dev  # puerto 3000 suele estar ocupado por Hermes
-```
-
----
-
-## Eventos Socket.IO
-
-### Cliente → Servidor
-| Evento | Payload | Descripción |
-|--------|---------|-------------|
-| `room:create` | `{name}` | Crear sala nueva |
-| `room:join` | `{code, name}` | Unirse a sala existente |
-| `game:start` | — | Iniciar partida (solo host) |
-| `player:move` | `{x, y}` | Actualizar posición |
-| `task:complete` | `{taskId}` | Completar una tarea |
-| `sabotage:zone` | `{zoneId}` | Sabotear zona (jefe/lamebotas) |
-| `sabotage:extra_task` | `{targetId}` | Asignar tarea extra (jefe) |
-| `sabotage:morale` | `{targetId}` | Bajar moral (jefe) |
-| `sabotage:close_door` | `{zoneId}` | Cerrar puerta (jefe) |
-| `sabotage:fake_task` | — | Fingir tarea (lamebotas) |
-| `sabotage:false_report` | — | Crear reporte falso (lamebotas) |
-| `sabotage:block_task` | `{taskId}` | Bloquear tarea temporalmente (lamebotas) |
-| `sabotage:report` | — | Reportar sabotaje cercano y abrir reunión (empleado) |
-| `meeting:call` | — | Convocar reunión |
-| `meeting:chat` | `{message}` | Mensaje de chat en reunión |
-| `vote:cast` | `{targetId}` | Votar jugador o "skip" |
-
-### Servidor → Cliente
-| Evento | Payload | Descripción |
-|--------|---------|-------------|
-| `room:created` | `{code, playerId}` | Sala creada |
-| `room:joined` | `{code, playerId}` | Unión exitosa |
-| `room:update` | `{code, hostId, players[]}` | Estado de lobby |
-| `game:role` | `{role, secondaryObjectiveText}` | Rol secreto asignado |
-| `game:started` | gameState | Partida iniciada |
-| `game:update` | gameState | Estado completo actualizado |
-| `game:tick` | `{timeRemaining, taskPercent, players}` | Tick cada 1 seg |
-| `game:ended` | `{winners, reason, players[]}` | Fin de partida |
-| `player:moved` | `{playerId, x, y}` | Otro jugador se movió |
-| `task:completed` | `{taskId, completedBy, playerName}` | Tarea completada |
-| `sabotage:triggered` | `{type, zoneId, affected[]}` | Sabotaje activado |
-| `sabotage:extra_task` | `{from}` | Tarea extra recibida |
-| `sabotage:morale` | `{from}` | Moral bajada |
-| `sabotage:door_closed` | `{zoneId, expires}` | Puerta cerrada |
-| `sabotage:fake_task` | `{playerId, fakeTasks}` | Confirmación privada de fake task |
-| `sabotage:false_report` | `{from, affected[]}` | Reporte falso difundido |
-| `sabotage:block_task` | `{taskId, expires}` | Tarea bloqueada temporalmente |
-| `sabotage:reported` | `{reportedBy, playerName, sabotageType, zoneId?, taskId?}` | Reporte de sabotaje válido |
-| `meeting:started` | `{calledBy, playerName}` | Reunión iniciada |
-| `meeting:chat` | `{playerId, playerName, message}` | Mensaje de chat |
-| `voting:started` | — | Fase de votación |
-| `voting:ended` | `{tally, sanctioned, sanctionType}` | Resultado votación |
-| `vote:confirmed` | `{targetId}` | Voto registrado |
-| `error:message` | `{message}` | Error |
-
----
-
-## Configuración de Phaser
-
-```js
-{
-  type: Phaser.AUTO,
-  scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
-  dom: { createContainer: true },  // Necesario para add.dom() (inputs HTML)
-  physics: { default: 'arcade', arcade: { debug: false } },
-  scene: [LobbyScene, GameScene, MeetingScene, EndScene]
-}
-```
-
-**Importante:** `dom: { createContainer: true }` es obligatorio para que los inputs de texto HTML funcionen dentro del canvas de Phaser.
-
----
-
-## Limitaciones conocidas del MVP
-
-1. **Sin persistencia:** Si el servidor reinicia, las salas activas se pierden
-2. **Free tier sleep:** Render free duerme tras 15 min sin tráfico (~30 seg para despertar)
-3. **Sprites placeholder:** Los jugadores son círculos de color, no pixel art
-4. **Minijuegos simples:** Progress bar, clicks, sequence — no son minijuegos reales
-5. **Cámara:** Ya sigue al jugador con zoom; falta pulir colisiones/oclusiones estilo Among Us
-6. **Sin colisiones:** Los jugadores se mueven libremente sin chocar con mobiliario
-7. **Sistema de puntos simplificado:** Los cálculos de puntos son aproximados
-8. **Objetivos secundarios:** Ya se verifican en estado/puntos, pero algunas metas siguen simplificadas
-9. **Sabotajes del lamebotas:** `fakeTask`, `falseReport`, `blockTask` ya tienen eventos socket; falta balance fino con partidas humanas
-10. **Reportar sabotaje:** Ya existe evento/botón; falta pulir UI de evidencia y distancia por tipo de sabotaje
-11. **UI/HUD responsive incompleto:** en viewports bajos el `GameScene` todavía puede mostrar recortes/traslapes por la combinación de cámara, zoom y overlays fijos
-
-### Workaround actual para tareas
-- Click cerca de una zona con task
-- Tecla `E` para abrir la task cercana
-- Botón azul `🛠` para abrir la task cercana
-- En viewport bajo el rango de interacción es más permisivo, pero esto es un workaround, no la solución final del layout
-
----
+Producción usa Render. Un push o merge puede activar deploy según la configuración remota; por eso commit, push y deploy son decisiones separadas. Antes de publicar deben pasar los gates de [`TEST_INFRA.md`](TEST_INFRA.md).

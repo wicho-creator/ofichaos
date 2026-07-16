@@ -1,37 +1,44 @@
-# OfiChaos — Test Infrastructure Status
+# OfiChaos — Estado de verificación
 
-This file confirms that the E2E test suite has been successfully implemented and is ready for execution.
+Fecha del último freeze local: **2026-07-16**.
 
-## 1. Test Runner Command
+## Estado revisado
 
-To execute the entire E2E test suite, run the following command in the project root:
+- Rama: `feat/ofichaos-minigames-map-pass`.
+- Base: `6986346`.
+- Producción permanece en `6986346` hasta una decisión explícita de publicación.
+- Cambios locales sin push ni deploy al registrar este documento.
 
-```bash
-node --test tests/e2e.test.js
-```
+## Evidencia
 
-## 2. Test Suite Summary
+| Gate | Resultado |
+|---|---|
+| `npm test` | **166/166** |
+| `npm run check` | PASS |
+| `git diff HEAD --check` | PASS |
+| Escaneo de líneas añadidas | sin secretos, `eval`/`Function`, HTML inseguro ni debug nuevo |
+| Cuatro Chrome aislados | 4 clientes, 11 etapas, 0 errores |
+| Minijuegos compactos | 5 tareas × 2 viewports = 10/10, 0 errores |
+| Matriz móvil | `390×844` y `360×640`, PASS |
+| Paisaje/compacto | `640×390`, `568×320`, `360×300`, PASS |
+| Objetivos táctiles | mínimo 44 px en paneles medidos |
 
-The test suite is written using Node.js's native `test` and `assert` modules (no third-party test runners or heavy browser installations required). It performs extensive in-process Socket.IO client simulations and client-side system unit/math mock tests:
+Los logs y reportes de harness son temporales en `/tmp`; no forman parte del repositorio.
 
-*   **Tier 1 (Core Server State & Single-Player Mechanics)**: Room creation, code generation, name sanitization, lobby bounds, host migration, movement broadcast, meetings, secret role assignment, objectives, and cooldowns.
-*   **Tier 2 (Multiplayer Integration & Happy-Path Workflows)**: Startup player validation, meeting cycles, employee victory conditions, boss victory conditions, burnout activation/recovery, lamebotas fake tasks/false reports, and door lockouts.
-*   **Tier 3 (UI, Physics & Client Interactivity)**: Direct imports and mock assertions of the client-side helper modules (Phaser scene layouts, interaction distance bounds, task overlays, and responsive scaling).
-*   **Tier 4 (Adversarial, Security & Network Failure Resistance)**: Host dropouts mid-game, invalid vote rejects, coordinate checks, and anti-cheat validation.
+## Cobertura adversarial clave
 
-## 3. Coverage & Execution Summary
+- movimiento solo durante `playing`, sin atravesar sólidos, con ráfagas limitadas y sin retransmitir rechazos a peers;
+- cambios de sala validados antes de abandonar la membresía actual;
+- payloads Socket.IO `null`, primitivos, arrays, objetos hostiles y ACK no función;
+- tokens de tarea falsos, ajenos, cross-task y replay tras completar;
+- pérdida transitoria de acceso, bloqueo, puerta, reunión, fin, moral cero y burnout; `0` no activa fallbacks truthy;
+- heartbeat continuo de Reporte; blur/visibilidad liberan Reporte y D-pad; shutdown destruye paneles y listeners;
+- sabotajes con IDs/objetivos inválidos sin mutación, estadística ni cooldown;
+- puerta remota rechazada;
+- votos solo de miembros actuales, hacia objetivos actuales, inmutables después del primer envío; sanción y `cause_sanction` requieren una mutación real;
+- callbacks `task:start`/`task:action`/cierres tardíos sin afectar panel nuevo;
+- proyecciones públicas sin roles ni cooldowns ajenos.
 
-Upon running the tests on the current codebase, the following results are obtained:
+## Cierre
 
-*   **Total Executed**: 53 tests
-*   **Passed**: 49 tests
-*   **Failed (Expected Gaps/Bugs)**: 4 tests
-
-### Detailed Failure Backlog (Identified Gaps)
-
-The 4 failing tests assert the **correct/intended** security behaviors of the system, which are currently unimplemented or buggy in the MVP codebase:
-
-1.  **TC-T2-19 (Voting tie skip)**: The server incorrectly sanctions the first player in the iteration during a tie, rather than skipping the sanctions and returning to the playing phase.
-2.  **TC-T4-02 (Anti-Cheat: Speed checking)**: The server currently accepts teleports and impossible velocity updates without speed limits validation.
-3.  **TC-T4-05 (Anti-Cheat: Task distance validation)**: The server accepts `task:complete` emissions regardless of the player's physical coordinates on the map.
-4.  **TC-T4-04 (Sanctions enforcement)**: The server does not restrict player coordinates updates or ability triggers while a player's `suspendedUntil` or `abilityBlockedUntil` sanctions are active.
+Este resultado es evidencia local, no autorización de publicación. Antes de commit final debe existir revisión independiente vigente sobre el mismo diff. Antes de push/deploy debe repetirse el gate que corresponda al artefacto que se vaya a publicar.

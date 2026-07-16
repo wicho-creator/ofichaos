@@ -164,12 +164,12 @@ export class LobbyScene extends Phaser.Scene {
 
   startDemoRoom(name = 'Wicho') {
     const demoState = {
-      phase: 'playing', timeRemaining: 455000, taskPercent: 20,
+      phase: 'playing', timeRemaining: 455000, taskPercent: 0,
       tasks: [
         { id: 'reporte', name: 'Imprimir reporte', zone: 'recepcion', completed: false },
-        { id: 'correos', name: 'Responder correos', zone: 'cubiculos', completed: true },
+        { id: 'correos', name: 'Responder correos', zone: 'cubiculos', completed: false },
         { id: 'cafe', name: 'Preparar café', zone: 'cocina', completed: false },
-        { id: 'archivos', name: 'Ordenar archivos', zone: 'archivo', completed: false, blocked: true, blockedUntil: Date.now() + 12000 },
+        { id: 'archivos', name: 'Ordenar archivos', zone: 'archivo', completed: false },
         { id: 'wifi', name: 'Arreglar WiFi', zone: 'servidor', completed: false }
       ],
       players: [
@@ -178,7 +178,7 @@ export class LobbyScene extends Phaser.Scene {
         { id: 'demo-ana', name: 'Ana', x: 560, y: 205, morale: 72, role: 'empleado', tasksCompleted: 1, burnout: false, cooldowns: {} },
         { id: 'demo-luis', name: 'Luis', x: 520, y: 455, morale: 95, role: 'empleado', tasksCompleted: 0, burnout: false, cooldowns: {} }
       ],
-      activeSabotages: [{ type: 'block_task', taskId: 'archivos', expires: Date.now() + 12000 }]
+      activeSabotages: []
     };
     this.scene.stop('LobbyScene');
     this.scene.start('GameScene', { roomCode: 'DEMO', myId: 'demo-me', myRole: 'empleado', roleText: 'Reportar un sabotaje sin quemarte', demoState });

@@ -4,9 +4,34 @@ import * as net from '../systems/networking.js';
 import { createButton, createPanel, createText } from '../systems/ui.js';
 import { createPlayerSprite, updatePlayerSprite } from '../systems/player.js';
 import { TASKS as CLIENT_TASKS } from '../systems/tasks.js';
+import { createMinigamePanel } from '../systems/minigame-ui.js';
 import { getRoleBriefing } from '../systems/onboarding.js';
-import { WORLD_BOUNDS, OFFICE_ZONES, getZoneCenter, findNearestTaskZone } from '../systems/world.js';
+import {
+  WORLD_BOUNDS,
+  OFFICE_ZONES,
+  OFFICE_OBSTACLES,
+  OFFICE_WALLS,
+  OFFICE_DOORS,
+  OFFICE_STATIONS,
+  findNearestTaskStation
+} from '../systems/world.js';
 import { gameHudLayout } from '../systems/theme.js';
+import { sabotageMenuLayout } from '../systems/sabotage-layout.js';
+
+const clearMobileInput = (input) => {
+  for (const key of ['left', 'right', 'up', 'down']) input[key] = false;
+};
+
+export function bindMobileInputLifecycle(windowTarget, documentTarget, input) {
+  const release = () => clearMobileInput(input);
+  const visibility = () => documentTarget.hidden && release();
+  windowTarget.addEventListener('blur', release);
+  documentTarget.addEventListener('visibilitychange', visibility);
+  return () => {
+    windowTarget.removeEventListener('blur', release);
+    documentTarget.removeEventListener('visibilitychange', visibility);
+  };
+}
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -32,6 +57,7 @@ export class GameScene extends Phaser.Scene {
     this.taskPercentText = null;
     this.cooldownText = null;
     this.mobileInput = { left: false, right: false, up: false, down: false };
+    this.mobileInputCleanup = null;
 
     // Sabotage warnings
     this.sabotageOverlay = null;
@@ -40,17 +66,22 @@ export class GameScene extends Phaser.Scene {
 
     // Active task minigame
     this.activeTaskPanel = null;
+    this.taskPanelRequest = null;
     this.networkDisposers = [];
   }
 
   resetRunState() {
+    this.activeTaskPanel?.destroy?.();
     this.players = {};
     this.sprites = {};
     this.gameState = null;
     this.activeTaskPanel = null;
+    this.taskPanelRequest = null;
     this.activeSabotageMenu = null;
     this.briefingOpen = false;
-    this.mobileInput = { left: false, right: false, up: false, down: false };
+    clearMobileInput(this.mobileInput);
+    this.mobileInputCleanup?.();
+    this.mobileInputCleanup = null;
     net.disposeAll(this.networkDisposers);
   }
 
@@ -66,43 +97,36 @@ export class GameScene extends Phaser.Scene {
     // Mapa de oficina (fondo)
     this.drawMap();
 
-    // Grupo de física estática para obstáculos de la oficina
     this.obstacles = this.physics.add.staticGroup();
-    const obstacleData = [
-      // Recepcion
-      { name: 'Escritorio Recepcion', x: 150, y: 220, w: 150, h: 40, color: 0x3b82f6 },
-      { name: 'Planta Recepcion', x: 120, y: 120, w: 30, h: 30, color: 0x3b82f6 },
-      // Cubiculos
-      { name: 'Cubículo 1', x: 480, y: 150, w: 100, h: 40, color: 0x10b981 },
-      { name: 'Cubículo 2', x: 620, y: 150, w: 100, h: 40, color: 0x10b981 },
-      { name: 'Divisor Cubículos', x: 595, y: 100, w: 10, h: 200, color: 0x10b981 },
-      // Juntas
-      { name: 'Mesa de Juntas', x: 900, y: 180, w: 150, h: 60, color: 0xf59e0b },
-      { name: 'Planta Juntas', x: 1060, y: 120, w: 30, h: 30, color: 0xf59e0b },
-      // Cocina
-      { name: 'Barra Cocina', x: 100, y: 400, w: 120, h: 40, color: 0xef4444 },
-      { name: 'Refrigerador', x: 260, y: 400, w: 40, h: 40, color: 0xef4444 },
-      { name: 'Mesa Cocina', x: 170, y: 490, w: 60, h: 60, color: 0xef4444 },
-      // Archivo
-      { name: 'Archivero 1', x: 420, y: 420, w: 40, h: 120, color: 0x8b5cf6 },
-      { name: 'Archivero 2', x: 520, y: 420, w: 40, h: 120, color: 0x8b5cf6 },
-      // Jefe
-      { name: 'Escritorio Jefe', x: 750, y: 460, w: 100, h: 50, color: 0xdc2626 },
-      { name: 'Librero Jefe', x: 700, y: 410, w: 140, h: 20, color: 0xdc2626 },
-      // RH
-      { name: 'Escritorio RH 1', x: 120, y: 680, w: 80, h: 40, color: 0x06b6d4 },
-      { name: 'Escritorio RH 2', x: 230, y: 680, w: 80, h: 40, color: 0x06b6d4 },
-      // Servidor
-      { name: 'Rack 1', x: 530, y: 670, w: 50, h: 120, color: 0x6366f1 },
-      { name: 'Rack 2', x: 650, y: 670, w: 50, h: 120, color: 0x6366f1 }
-    ];
-    for (const obs of obstacleData) {
-      const cx = obs.x + obs.w / 2;
-      const cy = obs.y + obs.h / 2;
-      const rect = this.add.rectangle(cx, cy, obs.w, obs.h, 0x1f2937, 0.0);
+    for (const obstacle of [...OFFICE_WALLS, ...OFFICE_OBSTACLES]) {
+      const rect = this.add.rectangle(
+        obstacle.x + obstacle.w / 2,
+        obstacle.y + obstacle.h / 2,
+        obstacle.w,
+        obstacle.h,
+        0x172554,
+        0
+      );
       this.physics.add.existing(rect, true);
       this.obstacles.add(rect);
-      this.drawObstacleDecoration(obs, cx, cy);
+    }
+
+    this.doors = this.physics.add.staticGroup();
+    this.doorColliders = new Map();
+    for (const door of OFFICE_DOORS) {
+      const horizontal = door.orientation === 'horizontal';
+      const blocker = this.add.rectangle(
+        door.x,
+        door.y,
+        horizontal ? door.width : 12,
+        horizontal ? 12 : door.width,
+        0xd83a4a,
+        0
+      );
+      this.physics.add.existing(blocker, true);
+      blocker.body.enable = false;
+      this.doors.add(blocker);
+      this.doorColliders.set(door.id, blocker);
     }
 
     this.cameras.main.setBounds(WORLD_BOUNDS.x, WORLD_BOUNDS.y, WORLD_BOUNDS.w, WORLD_BOUNDS.h);
@@ -120,17 +144,14 @@ export class GameScene extends Phaser.Scene {
 
     // Responsividad al redimensionar
     this.scale.on('resize', this.resize, this);
-    this.events.once('shutdown', () => {
-      this.scale.off('resize', this.resize, this);
-      net.disposeAll(this.networkDisposers);
-      if (this.sabotageTween) {
-        this.sabotageTween.stop();
-        this.sabotageTween = null;
-      }
-    });
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      this.mobileInputCleanup = bindMobileInputLifecycle(window, document, this.mobileInput);
+    }
+    this.events.once('shutdown', () => this.shutdown());
 
     // Listeners socket
     this.setupSocketListeners();
+    if (data?.gameState) this.applyGameState(data.gameState);
     this.time.delayedCall(100, () => this.showRoleBriefing());
 
     if (data?.demoState) {
@@ -146,77 +167,107 @@ export class GameScene extends Phaser.Scene {
     console.log('[GameScene] Iniciada', { role: this.myRole, roleText: this.roleText });
   }
 
+  shutdown() {
+    this.closeTaskPanel();
+    this.closeSabotageMenu();
+    clearMobileInput(this.mobileInput);
+    this.mobileInputCleanup?.();
+    this.mobileInputCleanup = null;
+    this.scale?.off?.('resize', this.resize, this);
+    net.disposeAll(this.networkDisposers);
+    if (this.sabotageTween) {
+      this.sabotageTween.stop();
+      this.sabotageTween = null;
+    }
+  }
+
   drawMap() {
     this.add.tileSprite(0, 0, WORLD_BOUNDS.w, WORLD_BOUNDS.h, 'floor_carpet_general').setOrigin(0).setDepth(-3);
 
-    const zoneColors = {
-      recepcion: 0x2563eb,
-      cubiculos: 0x22c55e,
-      juntas: 0xf6c344,
-      cocina: 0xf05a5a,
-      archivo: 0x8b5cf6,
-      jefe_oficina: 0xd83a4a,
-      rh: 0x06b6d4,
-      servidor: 0x6366f1
+    const colors = {
+      recepcion: 0x2563eb, cubiculos: 0x22c55e, juntas: 0xf6c344, cocina: 0xf05a5a,
+      archivo: 0x8b5cf6, jefe_oficina: 0xd83a4a, rh: 0x06b6d4, servidor: 0x6366f1
     };
-    const g = this.add.graphics();
+    const g = this.add.graphics().setDepth(-1);
 
-    // Pasillos anchos: la circulación debe leerse antes que la decoración.
-    g.lineStyle(22, 0xffffff, 0.7);
-    g.lineBetween(350, 200, 450, 200);
-    g.lineBetween(750, 200, 850, 200);
-    g.lineBetween(225, 300, 225, 400);
-    g.lineBetween(500, 300, 500, 400);
-    g.lineBetween(800, 300, 800, 400);
-    g.lineStyle(2, 0x172554, 0.16);
-    g.lineBetween(350, 200, 450, 200);
-    g.lineBetween(750, 200, 850, 200);
-    g.lineBetween(225, 300, 225, 400);
-    g.lineBetween(500, 300, 500, 400);
-    g.lineBetween(800, 300, 800, 400);
+    g.fillStyle(0xffffff, 0.78);
+    g.fillRoundedRect(52, 332, 1096, 268, 30);
+    g.fillRoundedRect(365, 52, 440, 796, 30);
+    g.lineStyle(3, 0x93c5fd, 0.42);
+    g.strokeRoundedRect(52, 332, 1096, 268, 30);
+    g.strokeRoundedRect(365, 52, 440, 796, 30);
 
     for (const zone of OFFICE_ZONES) {
-      const color = zoneColors[zone.id] || 0x64748b;
-      g.fillStyle(0x172554, 0.14);
-      g.fillRoundedRect(zone.x + 6, zone.y + 7, zone.w, zone.h, 18);
-      g.fillStyle(0xffffff, 0.9);
-      g.fillRoundedRect(zone.x, zone.y, zone.w, zone.h, 18);
+      const color = colors[zone.id] || 0x64748b;
+      g.fillStyle(0x172554, 0.13);
+      g.fillRoundedRect(zone.x + 7, zone.y + 8, zone.w, zone.h, 14);
+      g.fillStyle(0xffffff, 0.96);
+      g.fillRoundedRect(zone.x, zone.y, zone.w, zone.h, 14);
+      g.fillStyle(color, 0.12);
+      g.fillRoundedRect(zone.x + 5, zone.y + 5, zone.w - 10, zone.h - 10, 10);
 
       if (zone.id === 'cocina') {
-        this.add.tileSprite(zone.x + 4, zone.y + 4, zone.w - 8, zone.h - 8, 'floor_kitchen_tile')
-          .setOrigin(0).setAlpha(0.48).setDepth(-1);
+        this.add.tileSprite(zone.x + 5, zone.y + 5, zone.w - 10, zone.h - 10, 'floor_kitchen_tile')
+          .setOrigin(0).setAlpha(0.42).setDepth(-1);
       } else if (zone.id === 'servidor') {
-        this.add.tileSprite(zone.x + 4, zone.y + 4, zone.w - 8, zone.h - 8, 'floor_server_grid')
-          .setOrigin(0).setAlpha(0.55).setDepth(-1);
+        this.add.tileSprite(zone.x + 5, zone.y + 5, zone.w - 10, zone.h - 10, 'floor_server_grid')
+          .setOrigin(0).setAlpha(0.5).setDepth(-1);
       }
 
-      g.fillStyle(color, 0.13);
-      g.fillRoundedRect(zone.x + 4, zone.y + 4, zone.w - 8, zone.h - 8, 14);
-      g.lineStyle(4, 0x15203a, 0.92);
-      g.strokeRoundedRect(zone.x, zone.y, zone.w, zone.h, 18);
-      g.lineStyle(2, color, 0.95);
-      g.strokeRoundedRect(zone.x + 5, zone.y + 5, zone.w - 10, zone.h - 10, 13);
-
-      this.add.text(zone.x + zone.w / 2, zone.y + 17, zone.name.toUpperCase(), {
-        fontSize: '12px',
-        color: '#172554',
-        fontStyle: 'bold',
-        backgroundColor: '#ffffffdd',
-        padding: { x: 8, y: 4 }
-      }).setOrigin(0.5);
-
-      const task = CLIENT_TASKS.find((item) => item.zone === zone.id);
-      if (task) {
-        const taskLabel = this.add.text(zone.x + zone.w / 2, zone.y + zone.h - 17, task.name, {
-          fontSize: '11px',
-          color: '#172554',
-          fontStyle: 'bold',
-          backgroundColor: '#f6c344',
-          padding: { x: 8, y: 4 }
-        }).setOrigin(0.5);
-        this.tweens.add({ targets: taskLabel, scaleX: 1.04, scaleY: 1.04, duration: 900, yoyo: true, repeat: -1 });
-      }
+      this.add.text(zone.x + 12, zone.y + 12, zone.name.toUpperCase(), {
+        fontSize: '11px', color: '#172554', fontStyle: 'bold', backgroundColor: '#ffffffdd', padding: { x: 7, y: 4 }
+      }).setDepth(3);
     }
+
+    for (const wall of OFFICE_WALLS) {
+      g.fillStyle(0x172554, 0.92);
+      g.fillRect(wall.x, wall.y, wall.w, wall.h);
+      g.fillStyle(0xffffff, 0.42);
+      if (wall.w > wall.h) g.fillRect(wall.x, wall.y, wall.w, 2);
+      else g.fillRect(wall.x, wall.y, 2, wall.h);
+    }
+
+    for (const obstacle of OFFICE_OBSTACLES) {
+      this.drawObstacleDecoration(obstacle, obstacle.x + obstacle.w / 2, obstacle.y + obstacle.h / 2);
+    }
+
+    this.doorVisuals = new Map();
+    for (const door of OFFICE_DOORS) this.drawDoor(door);
+    for (const station of OFFICE_STATIONS) this.drawTaskStation(station);
+  }
+
+  drawDoor(door) {
+    const horizontal = door.orientation === 'horizontal';
+    const threshold = this.add.rectangle(
+      door.x, door.y, horizontal ? door.width : 16, horizontal ? 16 : door.width, 0xf6c344, 0.28
+    ).setStrokeStyle(2, 0xb77900, 0.7).setDepth(2);
+    const jambOffset = door.width / 2;
+    const jambA = this.add.rectangle(
+      door.x + (horizontal ? -jambOffset : 0), door.y + (horizontal ? 0 : -jambOffset),
+      horizontal ? 9 : 18, horizontal ? 18 : 9, 0x172554
+    ).setDepth(3);
+    const jambB = this.add.rectangle(
+      door.x + (horizontal ? jambOffset : 0), door.y + (horizontal ? 0 : jambOffset),
+      horizontal ? 9 : 18, horizontal ? 18 : 9, 0x172554
+    ).setDepth(3);
+    const leaf = this.add.rectangle(
+      door.x, door.y, horizontal ? door.width - 10 : 10, horizontal ? 10 : door.width - 10, 0xd83a4a
+    ).setStrokeStyle(3, 0x172554).setDepth(4).setVisible(false);
+    const sign = this.add.text(door.x, door.y - (horizontal ? 18 : 0), 'ENTRADA', {
+      fontSize: '8px', color: '#172554', fontStyle: 'bold', backgroundColor: '#f6c344dd', padding: { x: 4, y: 2 }
+    }).setOrigin(0.5).setDepth(4);
+    if (!horizontal) sign.setPosition(door.x + 23, door.y).setAngle(90);
+    this.doorVisuals.set(door.id, { threshold, jambA, jambB, leaf, sign });
+  }
+
+  drawTaskStation(station) {
+    const pulse = this.add.circle(station.x, station.y, 26, 0xf6c344, 0.16).setStrokeStyle(3, 0xb77900, 0.8).setDepth(2);
+    this.tweens.add({ targets: pulse, scale: 1.14, alpha: 0.32, duration: 720, yoyo: true, repeat: -1 });
+    this.add.rectangle(station.x, station.y, 34, 26, 0xf8fafc).setStrokeStyle(3, 0x172554).setDepth(3);
+    this.add.circle(station.x + 9, station.y - 6, 3, 0x22c55e).setDepth(4);
+    this.add.text(station.x, station.y + 30, station.label, {
+      fontSize: '9px', color: '#172554', fontStyle: 'bold', backgroundColor: '#f6c344ee', padding: { x: 5, y: 3 }
+    }).setOrigin(0.5).setDepth(4);
   }
 
   createHUD() {
@@ -518,11 +569,11 @@ export class GameScene extends Phaser.Scene {
       this.hud.btnInteract.setPositionAndSize(mainBtnX, mainBtnY, 56, 56);
       this.hud.btnInteract.label.setFontSize('22px');
 
-      this.hud.btnMeeting.setPositionAndSize(mainBtnX - 58, mainBtnY, 40, 40);
+      this.hud.btnMeeting.setPositionAndSize(mainBtnX - 58, mainBtnY, 44, 44);
       this.hud.btnMeeting.label.setFontSize('16px');
 
       if (this.hud.btnSabotageOrReport) {
-        this.hud.btnSabotageOrReport.setPositionAndSize(mainBtnX, mainBtnY - 58, 40, 40);
+        this.hud.btnSabotageOrReport.setPositionAndSize(mainBtnX, mainBtnY - 58, 44, 44);
         this.hud.btnSabotageOrReport.label.setFontSize('16px');
       }
 
@@ -573,7 +624,7 @@ export class GameScene extends Phaser.Scene {
       const baseX = layout.dpad.x;
       const baseY = layout.dpad.y;
       const offset = narrow ? 42 : 38;
-      const size = narrow ? 44 : 40;
+      const size = 44;
 
       const makePad = (px, py, label, key) => {
         const btn = createButton(this, px, py, label, () => {}, {
@@ -581,6 +632,7 @@ export class GameScene extends Phaser.Scene {
         });
         btn.hit.on('pointerdown', () => { this.mobileInput[key] = true; });
         btn.hit.on('pointerup', () => { this.mobileInput[key] = false; });
+        btn.hit.on('pointerupoutside', () => { this.mobileInput[key] = false; });
         btn.hit.on('pointerout', () => { this.mobileInput[key] = false; });
 
         btn.bg.setScrollFactor(0);
@@ -601,65 +653,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   repositionActivePanels(w, h) {
-    // Redimensionar Sabotaje si está abierto
     if (this.activeSabotageMenu) {
       this.closeSabotageMenu();
       this.startSabotageMenu();
     }
-
-    // Redimensionar Tarea activa si está abierta
-    if (this.activeTaskPanel) {
-      const panelX = w / 2;
-      const panelY = h / 2;
-      const task = this.activeTaskPanel.task;
-
-      const panel = this.activeTaskPanel.elements[0];
-      const title = this.activeTaskPanel.elements[1];
-      const desc = this.activeTaskPanel.elements[2];
-
-      const panelW = w < 400 ? w - 30 : 350;
-      if (panel && panel.drawPanel) panel.drawPanel(panelX, panelY, panelW, 250);
-      if (title) title.setPosition(panelX, panelY - 90);
-      if (desc) {
-        desc.setPosition(panelX, panelY - 50);
-        desc.setStyle({ wordWrap: { width: panelW - 40 } });
-      }
-
-      if (task.type === 'progress') {
-        const progressBar = this.activeTaskPanel.progressBar;
-        const progressFill = this.activeTaskPanel.progressFill;
-        const closeBtn = this.activeTaskPanel.closeBtn;
-
-        const barW = panelW - 50;
-        if (progressBar) {
-          progressBar.setPosition(panelX, panelY);
-          progressBar.setSize(barW, 30);
-        }
-        if (progressFill) {
-          progressFill.setPosition(panelX - barW / 2, panelY);
-          // El progreso actual se ajustará en el siguiente loop/animación
-        }
-        if (closeBtn && closeBtn.setPositionAndSize) {
-          closeBtn.setPositionAndSize(panelX, panelY + 100, 100, 30);
-        }
-      } else if (task.type === 'click') {
-        const clickText = this.activeTaskPanel.clickText;
-        const clickBtn = this.activeTaskPanel.clickBtn;
-
-        if (clickText) clickText.setPosition(panelX, panelY);
-        if (clickBtn && clickBtn.setPositionAndSize) {
-          clickBtn.setPositionAndSize(panelX, panelY + 60, 150, 50);
-        }
-      } else if (task.type === 'sequence') {
-        const stepText = this.activeTaskPanel.stepText;
-        const stepBtn = this.activeTaskPanel.stepBtn;
-
-        if (stepText) stepText.setPosition(panelX, panelY);
-        if (stepBtn && stepBtn.setPositionAndSize) {
-          stepBtn.setPositionAndSize(panelX, panelY + 60, 200, 50);
-        }
-      }
-    }
+    this.activeTaskPanel?.resize(w, h);
   }
 
   getCooldownLine(me) {
@@ -679,17 +677,9 @@ export class GameScene extends Phaser.Scene {
     net.disposeAll(this.networkDisposers);
     const on = (event, handler) => this.networkDisposers.push(net.subscribe(event, handler));
 
-    on('game:started', (gs) => {
-      this.gameState = gs;
-      this.syncPlayers(gs);
-      this.updateHUD(gs);
-    });
+    on('game:started', (gs) => this.applyGameState(gs));
 
-    on('game:update', (gs) => {
-      this.gameState = gs;
-      this.syncPlayers(gs);
-      this.updateHUD(gs);
-    });
+    on('game:update', (gs) => this.applyGameState(gs));
 
     on('game:private', ({ playerId, cooldowns }) => {
       if (playerId !== this.myId || !this.players[this.myId]) return;
@@ -701,6 +691,7 @@ export class GameScene extends Phaser.Scene {
       if (!this.gameState) this.gameState = {};
       this.gameState.timeRemaining = data.timeRemaining;
       this.gameState.taskPercent = data.taskPercent;
+      this.gameState.activeSabotages = data.activeSabotages || [];
       // Actualizar posiciones de jugadores remotos
       if (data.players) {
         for (const pid of Object.keys(data.players)) {
@@ -733,15 +724,12 @@ export class GameScene extends Phaser.Scene {
         if (playerId === this.myId) {
           const localSprite = this.sprites[playerId];
           if (localSprite) {
-            const dist = Phaser.Math.Distance.Between(localSprite.container.x, localSprite.container.y, x, y);
-            if (dist > 30) {
-              localSprite.container.setPosition(x, y);
-              if (localSprite.container.body) {
-                localSprite.container.body.reset(x, y);
-              }
-              this.players[playerId].x = x;
-              this.players[playerId].y = y;
+            localSprite.container.setPosition(x, y);
+            if (localSprite.container.body) {
+              localSprite.container.body.reset(x, y);
             }
+            this.players[playerId].x = x;
+            this.players[playerId].y = y;
           }
         } else {
           this.players[playerId].x = x;
@@ -750,7 +738,7 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    on('task:completed', ({ taskId, completedBy, playerName }) => {
+    on('task:completed', ({ taskId, playerName }) => {
       const task = CLIENT_TASKS.find((t) => t.id === taskId);
       this.showFloatingText(`${playerName} completó: ${task?.name || taskId}`, 0x4ade80);
       if (this.activeTaskPanel && this.activeTaskPanel.taskId === taskId) {
@@ -793,6 +781,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     on('meeting:started', ({ calledBy, playerName }) => {
+      clearMobileInput(this.mobileInput);
+      this.closeTaskPanel();
       this.showFloatingText(`Reunión convocada por ${playerName}`, 0xfbbf24);
       const players = Object.values(this.players).map(({ id, name, x, y, morale, burnout, tasksCompleted }) => ({
         id, name, x, y, morale, burnout, tasksCompleted
@@ -814,8 +804,16 @@ export class GameScene extends Phaser.Scene {
     });
 
     on('error:message', ({ message }) => {
+      if (this.activeTaskPanel?.pending) this.closeTaskPanel();
       this.showFloatingText(message, 0xef4444);
     });
+  }
+
+  applyGameState(gs) {
+    if (!gs) return;
+    this.gameState = gs;
+    this.syncPlayers(gs);
+    this.updateHUD(gs);
   }
 
   syncPlayers(gs) {
@@ -828,9 +826,24 @@ export class GameScene extends Phaser.Scene {
           this.cameras.main.startFollow(this.sprites[p.id].container, true, 0.12, 0.12);
           // Habilitar colisiones del contenedor de jugador con obstáculos
           this.physics.add.collider(this.sprites[p.id].container, this.obstacles);
+          this.physics.add.collider(this.sprites[p.id].container, this.doors);
         }
       }
       Object.assign(this.players[p.id], p);
+    }
+  }
+
+  syncDoors(activeSabotages = []) {
+    const closedDoors = new Set(activeSabotages.filter(({ type }) => type === 'close_door').map(({ doorId }) => doorId));
+
+    for (const door of OFFICE_DOORS) {
+      const closed = closedDoors.has(door.id);
+      const collider = this.doorColliders?.get(door.id);
+      if (collider?.body) collider.body.enable = closed;
+      const visual = this.doorVisuals?.get(door.id);
+      visual?.leaf?.setVisible(closed);
+      visual?.threshold?.setFillStyle(closed ? 0xd83a4a : 0xf6c344, closed ? 0.58 : 0.28);
+      visual?.sign?.setText(closed ? 'CERRADA' : 'ENTRADA').setBackgroundColor(closed ? '#d83a4a' : '#f6c344dd').setColor(closed ? '#ffffff' : '#172554');
     }
   }
 
@@ -876,6 +889,7 @@ export class GameScene extends Phaser.Scene {
 
     // Actualizar advertencias de sabotaje activo
     const hasActiveSabotages = gs.activeSabotages && gs.activeSabotages.length > 0;
+    this.syncDoors(gs.activeSabotages || []);
     if (hasActiveSabotages) {
       if (!this.sabotageTween) {
         this.sabotageOverlay.setVisible(true);
@@ -891,7 +905,7 @@ export class GameScene extends Phaser.Scene {
 
       const descriptions = gs.activeSabotages.map((s) => {
         if (s.type === 'zone') return `Zona: ${s.zoneId.toUpperCase()}`;
-        if (s.type === 'close_door') return `Puerta Cerrada: ${s.zoneId.toUpperCase()}`;
+        if (s.type === 'close_door') return `Puerta Cerrada: ${(s.doorId || s.zoneId).toUpperCase()}`;
         if (s.type === 'block_task') return `Tarea Bloqueada: ${s.taskId.toUpperCase()}`;
         if (s.type === 'false_report') return `Alarma Falsa / Pánico`;
         return s.type.toUpperCase();
@@ -919,7 +933,7 @@ export class GameScene extends Phaser.Scene {
     const me = this.players[this.myId];
     if (!me) return;
 
-    if (this.briefingOpen) {
+    if (this.briefingOpen || this.activeTaskPanel) {
       this.sprites[this.myId]?.container?.body?.setVelocity(0, 0);
       return;
     }
@@ -967,404 +981,165 @@ export class GameScene extends Phaser.Scene {
   }
 
   tryOpenNearbyTask() {
+    if (this.activeTaskPanel) return;
     const me = this.players[this.myId];
     if (!me) return;
-    const zone = findNearestTaskZone(me.x, me.y);
-    const nearestTask = zone && CLIENT_TASKS.find((task) => task.zone === zone.id);
-    const center = zone && getZoneCenter(zone.id);
-    const distance = center ? Phaser.Math.Distance.Between(me.x, me.y, center.x, center.y) : Infinity;
-    if (nearestTask && distance < this.getTaskInteractionDistance()) {
-      this.openTaskPanel(nearestTask);
-    } else {
-      this.showFloatingText('Acércate a una zona y presiona E para trabajar', 0xfbbf24);
+    if (this.myRole !== 'empleado') {
+      this.showFloatingText('Solo los empleados pueden completar encargos', 0xfbbf24);
+      return;
     }
+
+    const station = findNearestTaskStation(me.x, me.y);
+    const task = station && CLIENT_TASKS.find((item) => item.id === station.taskId);
+    const distance = station ? Phaser.Math.Distance.Between(me.x, me.y, station.x, station.y) : Infinity;
+    if (!task || distance > this.getTaskInteractionDistance()) {
+      this.showFloatingText('Busca una estación amarilla y acércate para trabajar', 0xfbbf24);
+      return;
+    }
+    this.openTaskPanel(task);
   }
 
   handleMapClick(pointer) {
-    // Verificar si click está cerca de una zona con tarea
-    const clickX = pointer.worldX;
-    const clickY = pointer.worldY;
-    const zones = OFFICE_ZONES;
-
-    for (const z of zones) {
-      if (clickX >= z.x && clickX <= z.x + z.w && clickY >= z.y && clickY <= z.y + z.h) {
-        const task = CLIENT_TASKS.find((t) => t.zone === z.id);
-        if (task) {
-          const me = this.players[this.myId];
-          if (me) {
-            const dist = Phaser.Math.Distance.Between(me.x, me.y, z.x + z.w / 2, z.y + z.h / 2);
-            if (dist < this.getTaskInteractionDistance()) {
-              this.openTaskPanel(task);
-            } else {
-              this.showFloatingText('Acércate a la zona para hacer la tarea', 0xfbbf24);
-            }
-          }
-        }
-        return;
-      }
+    if (this.activeTaskPanel || this.briefingOpen) return;
+    if (this.myRole !== 'empleado') return this.showFloatingText('Solo los empleados pueden completar encargos', 0xfbbf24);
+    const station = OFFICE_STATIONS.find(({ x, y }) => Phaser.Math.Distance.Between(pointer.worldX, pointer.worldY, x, y) <= 42);
+    if (!station) return;
+    const me = this.players[this.myId];
+    if (!me || Phaser.Math.Distance.Between(me.x, me.y, station.x, station.y) > this.getTaskInteractionDistance()) {
+      this.showFloatingText('Acércate a la estación para trabajar', 0xfbbf24);
+      return;
     }
+    const task = CLIENT_TASKS.find((item) => item.id === station.taskId);
+    if (task) this.openTaskPanel(task);
   }
 
-  openTaskPanel(task) {
-    // Verificar si ya está completada
-    if (this.gameState?.tasks) {
-      const ts = this.gameState.tasks.find((t) => t.id === task.id);
-      if (ts?.blocked) {
-        this.showFloatingText('Esta tarea está bloqueada por el lamebotas', 0xef4444);
-        return;
-      }
-      if (ts?.completed) {
-        this.showFloatingText('Esta tarea ya está completada', 0xfbbf24);
-        return;
-      }
-    }
-
+  async openTaskPanel(task, sessionId = null, request = null) {
+    const taskState = this.gameState?.tasks?.find((item) => item.id === task.id);
+    if (taskState?.blocked) return this.showFloatingText('Esta estación está bloqueada por sabotaje', 0xef4444);
+    if (taskState?.completed) return this.showFloatingText('Este encargo ya está completado', 0xfbbf24);
     if (this.activeTaskPanel) this.closeTaskPanel();
 
-    const panelX = this.scale.width / 2;
-    const panelY = this.scale.height / 2;
-    const panelW = this.scale.width < 400 ? this.scale.width - 30 : 350;
-
-    const panel = createPanel(this, panelX, panelY, panelW, 250, 0x16213e);
-    const title = createText(this, panelX, panelY - 90, task.name, { fontSize: '20px', color: '#fbbf24', bold: true }).setOrigin(0.5);
-    const desc = createText(this, panelX, panelY - 50, task.description, { fontSize: '14px', color: '#94a3b8', wrap: panelW - 40 }).setOrigin(0.5, 0);
-
-    let progressBar = null;
-    let progressFill = null;
-    let closeBtn = null;
-    let clickText = null;
-    let clickBtn = null;
-    let stepText = null;
-    let stepBtn = null;
-    let progress = 0;
-
-    // Custom Mini-game elements list
-    const customElements = [];
-    let cleanupFn = null;
-
-    if (task.id === 'cafe') {
-      // Reaction Test Mini-game: moving slider back and forth on a horizontal bar.
-      const barBg = this.add.rectangle(panelX, panelY, 240, 20, 0x334155);
-      const successZone = this.add.rectangle(panelX, panelY, 40, 20, 0x22c55e);
-      const slider = this.add.rectangle(panelX - 120, panelY, 8, 28, 0xffffff);
-      
-      customElements.push(barBg, successZone, slider);
-
-      const sliderTween = this.tweens.add({
-        targets: slider,
-        x: panelX + 120,
-        duration: 1000,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Linear'
-      });
-
-      clickBtn = createButton(this, panelX, panelY + 50, '¡DETENER!', () => {
-        const halfSuccess = 20; // 40px width success zone, so +/-20px from center
-        if (Math.abs(slider.x - panelX) <= halfSuccess) {
-          sliderTween.stop();
-          net.completeTask(task.id);
-          this.closeTaskPanel();
-        } else {
-          this.showFloatingText('¡Fallaste! Intenta de nuevo', 0xef4444);
-          this.tweens.add({
-            targets: slider,
-            alpha: 0.2,
-            duration: 80,
-            yoyo: true,
-            repeat: 2
-          });
-        }
-      }, { width: 140, height: 40, bgColor: 0x16a34a, fontSize: '15px' });
-
-      closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
-        sliderTween.stop();
-        this.closeTaskPanel();
-      }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
-
-    } else if (task.id === 'archivos') {
-      // Ordenar Archivos Mini-game: 4 buttons in a randomized layout to click in ascending order (1->2->3->4).
-      let expected = 1;
-      const numButtons = [];
-      const positions = [
-        { x: panelX - 60, y: panelY - 15 },
-        { x: panelX + 60, y: panelY - 15 },
-        { x: panelX - 60, y: panelY + 45 },
-        { x: panelX + 60, y: panelY + 45 }
-      ];
-      const shuffledPositions = [...positions].sort(() => Math.random() - 0.5);
-
-      const numValues = [1, 2, 3, 4];
-      numValues.forEach((num, idx) => {
-        const pos = shuffledPositions[idx];
-        const bg = this.add.rectangle(pos.x, pos.y, 50, 50, 0x334155).setInteractive({ useHandCursor: true });
-        bg.setStrokeStyle(2, 0xffffff, 0.5);
-        const label = this.add.text(pos.x, pos.y, num.toString(), { fontSize: '20px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5);
-        
-        bg.on('pointerover', () => { if (expected <= num) bg.setFillStyle(0x475569); });
-        bg.on('pointerout', () => { if (expected <= num) bg.setFillStyle(0x334155); });
-        
-        bg.on('pointerdown', () => {
-          if (num === expected) {
-            bg.setFillStyle(0x16a34a);
-            bg.disableInteractive();
-            expected++;
-            if (expected > 4) {
-              net.completeTask(task.id);
-              this.closeTaskPanel();
-            }
-          } else {
-            this.showFloatingText('¡Orden incorrecto! Empezando de nuevo', 0xef4444);
-            expected = 1;
-            numButtons.forEach((b) => {
-              b.bg.setFillStyle(0x334155);
-              b.bg.setInteractive({ useHandCursor: true });
-            });
-          }
-        });
-        
-        numButtons.push({ bg, label });
-        customElements.push(bg, label);
-      });
-
-      closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
-        this.closeTaskPanel();
-      }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
-
-    } else if (task.id === 'wifi' || task.id === 'correos') {
-      // Arreglar WiFi / Cables Mini-game: 4 colored nodes left to drag/connect to right matched colored nodes.
-      const colors = [
-        { name: 'red', val: 0xef4444 },
-        { name: 'yellow', val: 0xf59e0b },
-        { name: 'green', val: 0x10b981 },
-        { name: 'blue', val: 0x3b82f6 }
-      ];
-      const rightColors = [...colors].sort(() => Math.random() - 0.5);
-      
-      const linesGraphics = this.add.graphics();
-      customElements.push(linesGraphics);
-
-      const leftCircles = [];
-      const rightCircles = [];
-      const connections = [];
-      let activeStartNode = null;
-
-      colors.forEach((color, idx) => {
-        const y = panelY - 60 + idx * 40;
-        const x = panelX - 110;
-        const circle = this.add.circle(x, y, 10, color.val).setInteractive({ useHandCursor: true });
-        circle.setStrokeStyle(2, 0xffffff);
-        circle.colorData = color;
-        
-        circle.on('pointerdown', () => {
-          if (connections.some(c => c.colorName === color.name)) return;
-          activeStartNode = circle;
-        });
-        leftCircles.push(circle);
-        customElements.push(circle);
-      });
-
-      rightColors.forEach((color, idx) => {
-        const y = panelY - 60 + idx * 40;
-        const x = panelX + 110;
-        const circle = this.add.circle(x, y, 10, color.val).setInteractive({ useHandCursor: true });
-        circle.setStrokeStyle(2, 0xffffff);
-        circle.colorData = color;
-        rightCircles.push(circle);
-        customElements.push(circle);
-      });
-
-      const drawAllLines = (pointer) => {
-        linesGraphics.clear();
-        connections.forEach(c => {
-          linesGraphics.lineStyle(4, c.colorVal, 1);
-          linesGraphics.lineBetween(c.startX, c.startY, c.endX, c.endY);
-        });
-        if (activeStartNode && pointer) {
-          linesGraphics.lineStyle(4, activeStartNode.colorData.val, 0.7);
-          linesGraphics.lineBetween(activeStartNode.x, activeStartNode.y, pointer.x, pointer.y);
-        }
-      };
-
-      const onPointerMove = (pointer) => {
-        if (!activeStartNode) return;
-        drawAllLines(pointer);
-      };
-
-      const onPointerUp = (pointer) => {
-        if (!activeStartNode) return;
-        
-        let matched = false;
-        for (const rc of rightCircles) {
-          const dist = Phaser.Math.Distance.Between(pointer.x, pointer.y, rc.x, rc.y);
-          if (dist < 25) {
-            if (rc.colorData.name === activeStartNode.colorData.name) {
-              connections.push({
-                colorName: activeStartNode.colorData.name,
-                colorVal: activeStartNode.colorData.val,
-                startX: activeStartNode.x,
-                startY: activeStartNode.y,
-                endX: rc.x,
-                endY: rc.y
-              });
-              matched = true;
-              activeStartNode.disableInteractive();
-              rc.disableInteractive();
-              
-              if (connections.length === 4) {
-                net.completeTask(task.id);
-                this.closeTaskPanel();
-              }
-            }
-            break;
-          }
-        }
-        
-        activeStartNode = null;
-        drawAllLines(null);
-      };
-
-      this.input.on('pointermove', onPointerMove);
-      this.input.on('pointerup', onPointerUp);
-
-      cleanupFn = () => {
-        this.input.off('pointermove', onPointerMove);
-        this.input.off('pointerup', onPointerUp);
-      };
-
-      closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
-        this.closeTaskPanel();
-      }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
-
-    } else if (task.type === 'progress') {
-      const barW = panelW - 50;
-      progressBar = this.add.rectangle(panelX, panelY, barW, 30, 0x334155);
-      progressFill = this.add.rectangle(panelX - barW / 2, panelY, 0, 30, 0x4ade80).setOrigin(0, 0.5);
-
-      // Simular progresoAnimado
-      this.time.addEvent({
-        delay: 50,
-        repeat: task.duration / 50,
-        callback: () => {
-          progress += 50 / task.duration;
-          if (progressFill) progressFill.width = Math.min(barW, barW * progress);
-          if (progress >= 1) {
-            net.completeTask(task.id);
-            this.closeTaskPanel();
-          }
-        }
-      });
-
-      closeBtn = createButton(this, panelX, panelY + 100, 'Cancelar', () => {
-        this.closeTaskPanel();
-      }, { width: 100, height: 30, bgColor: 0x7f1d1d, fontSize: '12px' });
-    } else if (task.type === 'click') {
-      let clicks = 0;
-      clickText = createText(this, panelX, panelY, `Clicks: 0/10`, { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
-      clickBtn = createButton(this, panelX, panelY + 60, 'CLICK', () => {
-        clicks++;
-        clickText.label.setText(`Clicks: ${clicks}/10`);
-        if (clicks >= 10) {
-          net.completeTask(task.id);
-          this.closeTaskPanel();
-        }
-      }, { width: 150, height: 50, bgColor: 0x16a34a, fontSize: '16px' });
-    } else if (task.type === 'sequence') {
-      let steps = 0;
-      const totalSteps = task.steps || 5;
-      stepText = createText(this, panelX, panelY, `Paso: 0/${totalSteps}`, { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
-      stepBtn = createButton(this, panelX, panelY + 60, 'SIGUIENTE', () => {
-        steps++;
-        stepText.label.setText(`Paso: ${steps}/${totalSteps}`);
-        if (steps >= totalSteps) {
-          net.completeTask(task.id);
-          this.closeTaskPanel();
-        }
-      }, { width: 200, height: 50, bgColor: 0x6366f1, fontSize: '16px' });
+    if (this.roomCode !== 'DEMO' && !sessionId) {
+      request = Symbol(task.id);
+      this.taskPanelRequest = request;
+      const started = await net.startTask(task.id);
+      return this.applyTaskStartResult(task, request, started);
     }
 
-    this.activeTaskPanel = {
-      taskId: task.id,
-      task: task,
-      elements: [
-        panel, title, desc, 
-        closeBtn?.bg, closeBtn?.label, 
-        progressBar, progressFill,
-        clickText, clickBtn?.bg, clickBtn?.label,
-        stepText, stepBtn?.bg, stepBtn?.label,
-        ...customElements
-      ].filter(Boolean),
-      progressBar,
-      progressFill,
-      closeBtn,
-      clickText,
-      clickBtn,
-      stepText,
-      stepBtn,
-      cleanup: cleanupFn
-    };
+    if (request && this.taskPanelRequest !== request) return;
 
-    this.activeTaskPanel.elements.forEach((el) => el.setScrollFactor?.(0));
+    let panel;
+    panel = createMinigamePanel(this, task, {
+      authoritative: Boolean(sessionId),
+      onAction: (action) => {
+        if (sessionId) return net.sendTaskAction(sessionId, action).then((result) => this.applyTaskActionResult(panel, result));
+      },
+      onComplete: (taskId) => {
+        if (this.roomCode !== 'DEMO') return;
+        const demoTask = this.gameState?.tasks?.find((item) => item.id === taskId);
+        if (demoTask) demoTask.completed = true;
+        const tasks = this.gameState?.tasks || [];
+        this.gameState.taskPercent = tasks.length ? Math.round(tasks.filter((item) => item.completed).length / tasks.length * 100) : 0;
+        this.updateHUD(this.gameState);
+        this.time.delayedCall(350, () => {
+          if (this.activeTaskPanel !== panel) return;
+          this.closeTaskPanel(panel);
+          this.showFloatingText(`Completaste: ${task.name}`, 0x22c55e);
+        });
+      },
+      onCancel: () => this.closeTaskPanel(panel)
+    });
+    this.activeTaskPanel = panel;
+    this.sprites[this.myId]?.container?.body?.setVelocity(0, 0);
   }
 
-  closeTaskPanel() {
-    if (!this.activeTaskPanel) return;
-    if (this.activeTaskPanel.cleanup) {
-      this.activeTaskPanel.cleanup();
+  applyTaskStartResult(task, request, result) {
+    if (this.taskPanelRequest !== request) return;
+    if (result?.error) {
+      this.taskPanelRequest = null;
+      return this.showFloatingText(result.error, 0xef4444);
     }
-    for (const el of this.activeTaskPanel.elements) {
-      if (el && el.destroy) el.destroy();
+    return this.openTaskPanel(task, result.sessionId, request);
+  }
+
+  applyTaskActionResult(panel, result) {
+    if (this.activeTaskPanel !== panel) return result;
+    if (result?.error) {
+      this.closeTaskPanel(panel);
+      this.showFloatingText(result.error, 0xef4444);
     }
+    return result;
+  }
+
+  closeTaskPanel(expected = this.activeTaskPanel) {
+    if (this.activeTaskPanel !== expected) return;
+    this.taskPanelRequest = null;
+    this.activeTaskPanel?.destroy();
     this.activeTaskPanel = null;
   }
 
-  startSabotageMenu() {
+  startSabotageMenu(page = 0) {
     if (this.activeSabotageMenu) this.closeSabotageMenu();
+    this.floatingText?.destroy();
+    this.floatingText = null;
 
-    const panelX = this.scale.width / 2;
-    const panelY = this.scale.height / 2;
+    const layout = sabotageMenuLayout(this.scale.width, this.scale.height, this.myRole, page);
     const narrow = this.scale.width < 450;
-    const panelW = narrow ? this.scale.width - 30 : 410;
-    const panel = createPanel(this, panelX, panelY, panelW, this.myRole === 'lamebotas' ? 330 : 300, 0x7c2d12);
-    const title = createText(this, panelX, panelY - 135, this.myRole === 'lamebotas' ? 'SABOTAJES LAMEBOTAS' : 'SABOTAJE', { fontSize: narrow ? '16px' : '20px', color: '#ef4444', bold: true }).setOrigin(0.5);
-
+    const panel = createPanel(this, layout.panelX, layout.panelY, layout.panelW, layout.panelH, 0x7c2d12);
+    const title = createText(this, layout.panelX, layout.top + 28, this.myRole === 'lamebotas' ? 'SABOTAJES LAMEBOTAS' : 'SABOTAJE DEL JEFE', {
+      fontSize: narrow ? '16px' : '20px', color: '#ffffff', bold: true
+    }).setOrigin(0.5);
     const elements = [panel, title];
-    this.activeSabotageMenu = { elements };
-    const closeMenu = () => this.closeSabotageMenu();
-
-    if (this.myRole === 'lamebotas') {
-      const actions = [
-        ['Fingir tarea (+moral)', () => net.sabotageFakeTask()],
-        ['Reporte falso (-moral global)', () => net.sabotageFalseReport()],
-        ['Bloquear tarea aleatoria', () => {
-          const task = (this.gameState?.tasks || []).find((t) => !t.completed && !t.blocked);
-          if (task) net.sabotageBlockTask(task.id);
-          else this.showFloatingText('No hay tareas bloqueables', 0xfbbf24);
-        }]
-      ];
-      actions.forEach(([label, fn], idx) => {
-        const btn = createButton(this, panelX, panelY - 80 + idx * 55, label, () => { fn(); closeMenu(); }, { width: narrow ? panelW - 40 : 280, height: 38, bgColor: 0x991b1b, bgHover: 0xdc2626, fontSize: '13px' });
-        elements.push(btn.bg, btn.label);
+    this.activeSabotageMenu = { elements, page: layout.page };
+    const addAction = (target, label, fn, options = {}) => {
+      const button = createButton(this, target.x, target.y, label, () => {
+        fn();
+        if (options.keepOpen !== true) this.closeSabotageMenu();
+      }, {
+        width: target.width,
+        height: target.height,
+        bgColor: options.bgColor || 0x991b1b,
+        bgHover: 0xdc2626,
+        fontSize: options.fontSize || '12px',
+        radius: 12
       });
+      elements.push(button.bg, button.label);
+    };
+    const byId = (id) => layout.targets.find((target) => target.id === id);
+    const actions = {
+      fake: ['FINGIR TAREA · +MORAL', () => net.sabotageFakeTask()],
+      'false-report': ['REPORTE FALSO · PÁNICO', () => net.sabotageFalseReport()],
+      'block-task': ['BLOQUEAR TAREA ACTIVA', () => {
+        const task = (this.gameState?.tasks || []).find((item) => !item.completed && !item.blocked);
+        if (task) net.sabotageBlockTask(task.id);
+        else this.showFloatingText('No hay tareas bloqueables', 0xfbbf24);
+      }]
+    };
+    for (const [id, [label, fn]] of Object.entries(actions)) {
+      const target = byId(id);
+      if (target) addAction(target, label, fn, { fontSize: narrow ? '10px' : '12px' });
     }
 
-    const zones = ['recepcion', 'cubiculos', 'juntas', 'cocina', 'archivo', 'jefe_oficina', 'rh', 'servidor'];
-    const startY = this.myRole === 'lamebotas' ? panelY + 90 : panelY - 70;
-    zones.forEach((zid, i) => {
-      let x, y, btnW;
-      if (narrow) {
-        x = panelX + (i % 2 === 0 ? - (panelW - 40) / 4 : (panelW - 40) / 4);
-        y = startY + Math.floor(i / 2) * 30;
-        btnW = (panelW - 60) / 2;
-      } else {
-        x = panelX + (i % 2 === 0 ? -100 : 100);
-        y = startY + Math.floor(i / 2) * 30;
-        btnW = 180;
-      }
-      const btn = createButton(this, x, y, zid.toUpperCase(), () => { net.sabotageZone(zid); closeMenu(); }, { width: btnW, height: 24, bgColor: 0x991b1b, bgHover: 0xdc2626, fontSize: '11px' });
-      elements.push(btn.bg, btn.label);
+    OFFICE_ZONES.forEach((zone, index) => {
+      const target = byId(`zone-${index}`);
+      if (target) addAction(target, `ZONA · ${zone.name.toUpperCase()}`, () => net.sabotageZone(zone.id), { fontSize: narrow ? '10px' : '11px' });
     });
-    elements.forEach((el) => el.setScrollFactor?.(0));
+
+    const me = this.players[this.myId];
+    const nearestDoor = me && OFFICE_DOORS.reduce((nearest, door) => {
+      const distance = Phaser.Math.Distance.Between(me.x, me.y, door.x, door.y);
+      return !nearest || distance < nearest.distance ? { door, distance } : nearest;
+    }, null)?.door;
+    const zone = nearestDoor && OFFICE_ZONES.find((candidate) => candidate.id === nearestDoor.zoneId);
+    if (byId('close-door')) addAction(byId('close-door'), `CERRAR ACCESO · ${zone?.name.toUpperCase() || 'CERCANO'}`, () => {
+      if (nearestDoor) net.sabotageCloseDoor(nearestDoor.id);
+      else this.showFloatingText('No hay una puerta cercana', 0xfbbf24);
+    }, { bgColor: 0xd83a4a });
+    if (byId('zones-page')) addAction(byId('zones-page'), 'ELEGIR ZONA…', () => this.startSabotageMenu(1), { keepOpen: true });
+    if (byId('back')) addAction(byId('back'), layout.veryCompact ? 'ANTERIOR' : 'VOLVER A HABILIDADES', () => this.startSabotageMenu(layout.veryCompact ? layout.page - 1 : 0), { keepOpen: true });
+    if (byId('next')) addAction(byId('next'), 'SIGUIENTE', () => this.startSabotageMenu(layout.page + 1), { keepOpen: true });
+    addAction(byId('cancel'), 'CANCELAR', () => {}, { bgColor: 0x475569 });
+    elements.forEach((element) => element.setScrollFactor?.(0).setDepth?.(3001));
   }
 
   closeSabotageMenu() {
@@ -1375,6 +1150,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   showFloatingText(text, color = 0xffffff) {
+    this.floatingText?.destroy();
     const mobile = this.scale.width < 600;
     const startY = mobile ? 88 : 92;
     const ft = this.add.text(this.scale.width / 2, startY, text, {
@@ -1386,12 +1162,16 @@ export class GameScene extends Phaser.Scene {
       align: 'center',
       wordWrap: { width: this.scale.width - (mobile ? 48 : 40) }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(9999);
+    this.floatingText = ft;
     this.tweens.add({
       targets: ft,
       y: mobile ? 76 : 74,
       alpha: 0,
       duration: 2500,
-      onComplete: () => ft.destroy()
+      onComplete: () => {
+        if (ft.active) ft.destroy();
+        if (this.floatingText === ft) this.floatingText = null;
+      }
     });
   }
 

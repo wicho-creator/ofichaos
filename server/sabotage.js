@@ -1,3 +1,6 @@
+const { OFFICE_DOORS, OFFICE_STATIONS } = require('../shared/world-data');
+const { interactionBlocked } = require('./worldCollision');
+
 // sabotage.js — Lógica de sabotajes y efectos sobre jugadores
 
 const SABOTAGE_TYPES = {
@@ -33,7 +36,12 @@ function incrementSabotageStat(room, playerId, key) {
   room.gameState.sabotageStats[playerId][key] = (room.gameState.sabotageStats[playerId][key] || 0) + 1;
 }
 
+function invalidateTaskAtZeroMorale(player) {
+  if (player.morale <= 0) delete player.taskSession;
+}
+
 function sabotageZone(room, zoneId, saboteurId) {
+  if (typeof zoneId !== 'string' || !room.gameState.zones.some((zone) => zone.id === zoneId)) return null;
   const affected = [];
   for (const pid of Object.keys(room.players)) {
     const p = room.players[pid];
@@ -42,6 +50,7 @@ function sabotageZone(room, zoneId, saboteurId) {
     if (zone && isInZone(p, zone)) {
       p.morale -= SABOTAGE_EFFECTS[SABOTAGE_TYPES.ZONE].moraleLoss;
       if (p.morale < 0) p.morale = 0;
+      invalidateTaskAtZeroMorale(p);
       affected.push(pid);
     }
   }
@@ -61,12 +70,15 @@ function sabotageZone(room, zoneId, saboteurId) {
  * @param {string} targetId
  */
 function assignExtraTask(room, targetId, saboteurId) {
+  if (typeof targetId !== 'string') return null;
   const p = room.players[targetId];
-  if (!p) return;
+  if (!p || p.role !== 'empleado') return null;
   p.morale -= SABOTAGE_EFFECTS[SABOTAGE_TYPES.EXTRA_TASK].moraleLoss;
   if (p.morale < 0) p.morale = 0;
+  invalidateTaskAtZeroMorale(p);
   p.extraTasks = (p.extraTasks || 0) + 1;
   if (saboteurId) incrementSabotageStat(room, saboteurId, 'extraTask');
+  return p;
 }
 
 /**
@@ -75,27 +87,45 @@ function assignExtraTask(room, targetId, saboteurId) {
  * @param {string} targetId
  */
 function lowerMorale(room, targetId, saboteurId) {
+  if (typeof targetId !== 'string') return null;
   const p = room.players[targetId];
-  if (!p) return;
+  if (!p || p.role !== 'empleado') return null;
   p.morale -= SABOTAGE_EFFECTS[SABOTAGE_TYPES.LOWER_MORALE].moraleLoss;
   if (p.morale < 0) p.morale = 0;
+  invalidateTaskAtZeroMorale(p);
   if (saboteurId) incrementSabotageStat(room, saboteurId, 'lowerMorale');
+  return p;
 }
 
 /**
- * Cierra una puerta (zona) temporalmente.
+ * Cierra una puerta concreta temporalmente.
  * @param {Object} room
- * @param {string} zoneId
+ * @param {string} doorId
  * @param {string} saboteurId
  */
-function closeDoor(room, zoneId, saboteurId) {
-  incrementSabotageStat(room, saboteurId, 'closeDoor');
-  room.gameState.activeSabotages.push({
+function closeDoor(room, doorId, saboteurId) {
+  const selected = OFFICE_DOORS.find((door) => door.id === doorId);
+  const player = room.players[saboteurId];
+  const nearest = player && OFFICE_DOORS.reduce((best, door) => {
+    const distance = Math.hypot(player.x - door.x, player.y - door.y);
+    return !best || distance < best.distance ? { door, distance } : best;
+  }, null);
+  if (!selected || !room.gameState.zones?.some((zone) => zone.id === selected.zoneId)
+    || nearest?.door.id !== selected.id || nearest.distance > 170) return null;
+  const door = {
     type: SABOTAGE_TYPES.CLOSE_DOOR,
-    zoneId,
+    doorId: selected.id,
+    zoneId: selected.zoneId,
     saboteurId,
     expires: Date.now() + SABOTAGE_EFFECTS[SABOTAGE_TYPES.CLOSE_DOOR].duration
-  });
+  };
+  incrementSabotageStat(room, saboteurId, 'closeDoor');
+  room.gameState.activeSabotages.push(door);
+  for (const candidate of Object.values(room.players)) {
+    const station = candidate.taskSession && OFFICE_STATIONS.find(({ taskId }) => taskId === candidate.taskSession.taskId);
+    if (station && interactionBlocked(candidate, station, room.gameState.activeSabotages)) delete candidate.taskSession;
+  }
+  return door;
 }
 
 
@@ -103,7 +133,7 @@ function fakeTask(room, playerId) {
   const p = room.players[playerId];
   if (!p) return null;
   p.fakeTasks = (p.fakeTasks || 0) + 1;
-  p.morale = Math.min(100, (p.morale || 100) + SABOTAGE_EFFECTS[SABOTAGE_TYPES.FAKE_TASK].moraleGain);
+  p.morale = Math.min(100, (p.morale ?? 100) + SABOTAGE_EFFECTS[SABOTAGE_TYPES.FAKE_TASK].moraleGain);
   incrementSabotageStat(room, playerId, 'fakeTask');
   return { playerId, fakeTasks: p.fakeTasks };
 }
@@ -115,7 +145,8 @@ function falseReport(room, playerId) {
   for (const pid of Object.keys(room.players)) {
     if (pid === playerId) continue;
     const target = room.players[pid];
-    target.morale = Math.max(0, (target.morale || 100) - SABOTAGE_EFFECTS[SABOTAGE_TYPES.FALSE_REPORT].moraleLoss);
+    target.morale = Math.max(0, (target.morale ?? 100) - SABOTAGE_EFFECTS[SABOTAGE_TYPES.FALSE_REPORT].moraleLoss);
+    invalidateTaskAtZeroMorale(target);
     affected.push(pid);
   }
   incrementSabotageStat(room, playerId, 'falseReport');
@@ -133,6 +164,9 @@ function blockTask(room, taskId, playerId) {
   const duration = SABOTAGE_EFFECTS[SABOTAGE_TYPES.BLOCK_TASK].duration;
   task.blockedUntil = Date.now() + duration;
   task.blockedBy = playerId;
+  for (const player of Object.values(room.players)) {
+    if (player.taskSession?.taskId === taskId) delete player.taskSession;
+  }
   incrementSabotageStat(room, playerId, 'blockTask');
   room.gameState.activeSabotages.push({
     type: SABOTAGE_TYPES.BLOCK_TASK,

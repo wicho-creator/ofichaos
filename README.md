@@ -1,8 +1,8 @@
 # OfiChaos
 
-Party game web de deducción social para cuatro personas. Tres Empleados trabajan, reparan crisis y reúnen pistas mientras un Jefe secreto finge colaborar y sabotea una oficina caricaturesca.
+Party game web de deducción social para cuatro personas. Tres Empleados completan encargos y reparan crisis mientras un Jefe secreto finge colaborar y sabotea una oficina caricaturesca.
 
-## Jugar localmente
+## Ejecutar localmente
 
 ```bash
 npm install
@@ -15,75 +15,67 @@ Abre `http://localhost:3000`. Para usar otro puerto:
 PORT=3456 npm start
 ```
 
-1. Una persona crea la sala y comparte el código de cinco caracteres.
-2. Otras tres personas se unen desde sus navegadores.
-3. El host inicia cuando hay al menos cuatro jugadores.
-4. Cada cliente recibe un briefing privado con su rol, misión y primer paso.
-5. Muévete con WASD/flechas o los controles táctiles. Acércate a una estación para trabajar o reparar.
-6. Observa sabotajes y cambios de moral; convoca una reunión para discutir y votar.
-7. Completa la cuota antes del cierre o permite que el caos y el burnout den la victoria al Jefe.
+1. Una persona crea la sala y comparte el código.
+2. Otras tres personas se unen desde navegadores independientes.
+3. El host inicia la partida.
+4. Cada cliente recibe su rol y objetivo de forma privada.
+5. Muévete con WASD/flechas o D-pad táctil, acércate a una estación y completa su minijuego.
+6. Reporta crisis, discute y vota durante las reuniones.
 
-El botón **Probar sala demo** permite recorrer el mapa y probar la interfaz sin reunir cuatro clientes.
-
-## Integridad de la deducción
-
-- Los snapshots compartidos nunca contienen roles, objetivos privados ni cooldowns ajenos.
-- `game:role` entrega el briefing solo al socket propietario.
-- `game:private` entrega únicamente los cooldowns del jugador local.
-- Apariencia, color, chat y tarjetas de reunión son neutrales respecto del rol.
-- Los roles se revelan únicamente en la pantalla final.
-
-## Dirección visual
-
-Oficina 2D luminosa, caótica y legible: azul eléctrico para identidad, coral para crisis, amarillo para tareas y verde para progreso. El sabotaje altera el borde y el mundo sin ocultar el mapa. Los layouts se recomponen para escritorio y móvil; no son un dashboard reducido.
-
-Los contratos completos viven en:
-
-- [`PRODUCT.md`](PRODUCT.md): propósito, usuarios y principios.
-- [`DESIGN.md`](DESIGN.md): tokens, layouts, componentes y reglas visuales.
+**Probar sala demo** permite recorrer el mapa y la interfaz sin cuatro clientes.
 
 ## Arquitectura
 
-| Capa | Tecnología |
+| Capa | Responsabilidad |
 |---|---|
-| Cliente | Phaser 3 + DOM accesible para formularios/chat |
-| Servidor | Node.js + Express |
-| Multiplayer | Socket.IO |
-| Persistencia | En memoria; una instancia de servidor |
-
-Piezas principales:
+| Phaser 3 | Render, input, HUD, paneles y predicción local |
+| Node.js + Express | Servir cliente y proceso de juego |
+| Socket.IO | Transporte multijugador |
+| Servidor en memoria | Autoridad de salas, fases, movimiento, tareas, sabotajes y victoria |
 
 ```text
-client/src/scenes/       Lobby, juego, reunión y final
-client/src/systems/      red, jugadores, UI, onboarding, tema y mundo
-server/index.js          transporte y validación Socket.IO
-server/projections.js    estado público, privado y final
-server/roomManager.js    salas y acciones autoritativas
-server/gameState.js      fases, votación, moral y victoria
-tests/                   E2E, lifecycle, layouts, mundo y victoria
+shared/world-data.js            mapa, zonas, paredes, puertas, obstáculos y estaciones
+shared/minigames.js             reducers deterministas de los cinco minijuegos
+server/index.js                 trust boundary Socket.IO
+server/roomManager.js           salas, movimiento y sesiones autoritativas de tareas
+server/worldCollision.js        colisión de segmentos y línea de interacción
+server/projections.js           proyecciones públicas, privadas y finales
+client/src/scenes/GameScene.js  mundo, reconciliación y lifecycle de paneles
+client/src/systems/             red, UI, mundo, minijuegos y layouts
 ```
 
-`world.js` es la fuente cliente única de límites, zonas, obstáculos y búsqueda de estaciones. El servidor conserva la autoridad sobre movimiento, tareas, sabotajes, reuniones, votos y victoria.
+El cliente presenta y predice; el servidor decide. `shared/` es la fuente común para geometría y reducers que deben coincidir en navegador y Node.
+
+## Integridad y autoridad
+
+- Los snapshots públicos no incluyen roles, objetivos privados ni cooldowns ajenos.
+- `game:role` y `game:private` se envían solo al socket propietario.
+- El servidor valida fase, tipos, límites, velocidad, colisiones, proximidad y línea de interacción.
+- Una tarea requiere `task:start` y un token de sesión; `task:complete` directo falla de forma cerrada.
+- Reunión, fin de partida, burnout, bloqueo, puerta, pérdida de acceso o tarea ya completada invalidan sesiones activas.
+- Los sabotajes validan IDs, rol, objetivo y proximidad antes de mutar estado o consumir cooldown.
 
 ## Verificación
 
 ```bash
 npm test
+npm run check
+git diff HEAD --check
 ```
 
-También pueden ejecutarse por separado:
+La suite usa `node:test` y cubre Socket.IO, autoridad, payloads hostiles, proyecciones, colisiones, sesiones, lifecycle y layouts. El gate de runtime adicional usa cuatro Chrome aislados y la matriz `390×844`, `360×640`, `640×390`, `568×320` y `360×300`.
 
-```bash
-node --test tests/e2e.test.js
-node --test tests/victory_verification.test.js
-node --test tests/client-lifecycle.test.mjs tests/onboarding.test.mjs tests/theme-contract.test.mjs tests/world-layout.test.mjs
-```
+Detalles:
 
-La revisión responsive cubre escritorio, `390×844` y `360×640`. El gate de integración abre cuatro contextos aislados de Chrome y verifica crear/unirse/iniciar, privacidad de roles, reunión, chat, cuatro votos, reanudación y final sin errores de consola.
+- [`PROJECT.md`](PROJECT.md): mapa del código y contratos.
+- [`DOCS.md`](DOCS.md): autoridad, protocolo y límites técnicos.
+- [`TEST_INFRA.md`](TEST_INFRA.md): estrategia y comandos de QA.
+- [`TEST_READY.md`](TEST_READY.md): último resultado verificado.
+- [`PRODUCT.md`](PRODUCT.md) y [`DESIGN.md`](DESIGN.md): producto y dirección visual.
 
-## Alcance actual
+## Alcance
 
-Incluye una oficina, cuatro jugadores, tareas, sabotajes, moral/burnout, reunión, votación, sanciones, condiciones de victoria y revancha. No incluye cuentas, ranking, skins, múltiples mapas, reconexión persistente ni escalado horizontal de salas.
+Incluye una oficina `1200×900`, cinco minijuegos, sabotajes, moral/burnout, puertas, reunión, votación, victoria y revancha. No incluye cuentas, persistencia, matchmaking ni escalado horizontal; las salas viven en RAM de una sola instancia.
 
 ## Licencia
 

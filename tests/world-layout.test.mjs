@@ -1,11 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { SPAWN_POINTS } = require('../server/tasks.js');
 
 import { TASKS } from '../client/src/systems/tasks.js';
 import {
   WORLD_BOUNDS,
   OFFICE_ZONES,
   OFFICE_OBSTACLES,
+  OFFICE_WALLS,
+  OFFICE_DOORS,
+  OFFICE_STATIONS,
   OFFICE_PATHS,
   getZoneById,
   getZoneCenter,
@@ -15,10 +22,28 @@ import {
 const inside = (point, rect) =>
   point.x >= rect.x && point.x <= rect.x + rect.w &&
   point.y >= rect.y && point.y <= rect.y + rect.h;
-const overlaps = (point, rect) =>
-  point.x > rect.x && point.x < rect.x + rect.w &&
-  point.y > rect.y && point.y < rect.y + rect.h;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const PLAYER_RADIUS = 18;
+const pointHitsObstacle = (point, obstacle) =>
+  point.x + PLAYER_RADIUS > obstacle.x && point.x - PLAYER_RADIUS < obstacle.x + obstacle.w &&
+  point.y + PLAYER_RADIUS > obstacle.y && point.y - PLAYER_RADIUS < obstacle.y + obstacle.h;
+const doorHasClearLane = (door) => {
+  const colliders = [...OFFICE_OBSTACLES, ...OFFICE_WALLS];
+  for (let offset = -door.width / 2 + PLAYER_RADIUS; offset <= door.width / 2 - PLAYER_RADIUS; offset += 2) {
+    let clear = true;
+    for (let depth = -30; depth <= 30; depth += 2) {
+      const point = door.orientation === 'horizontal'
+        ? { x: door.x + offset, y: door.y + depth }
+        : { x: door.x + depth, y: door.y + offset };
+      if (colliders.some((collider) => pointHitsObstacle(point, collider))) {
+        clear = false;
+        break;
+      }
+    }
+    if (clear) return true;
+  }
+  return false;
+};
 
 test('el modelo del mundo es inmutable y conserva el contrato 1200x900', () => {
   assert.deepEqual(WORLD_BOUNDS, { x: 0, y: 0, w: 1200, h: 900 });
@@ -27,6 +52,10 @@ test('el modelo del mundo es inmutable y conserva el contrato 1200x900', () => {
   assert.ok(OFFICE_ZONES.every(Object.isFrozen));
   assert.ok(Object.isFrozen(OFFICE_OBSTACLES));
   assert.ok(OFFICE_OBSTACLES.every(Object.isFrozen));
+  assert.ok(Object.isFrozen(OFFICE_WALLS));
+  assert.ok(OFFICE_WALLS.every(Object.isFrozen));
+  assert.ok(Object.isFrozen(OFFICE_DOORS));
+  assert.ok(OFFICE_DOORS.every(Object.isFrozen));
   assert.ok(Object.isFrozen(OFFICE_PATHS));
   assert.ok(OFFICE_PATHS.every(Object.isFrozen));
 });
@@ -50,7 +79,7 @@ test('cada centro es accesible y no está bloqueado por mobiliario', () => {
     const center = getZoneCenter(zone.id);
     assert.ok(inside(center, zone), `${zone.id}: centro fuera de zona`);
     assert.ok(
-      !OFFICE_OBSTACLES.some((obstacle) => obstacle.zoneId === zone.id && overlaps(center, obstacle)),
+      !OFFICE_OBSTACLES.some((obstacle) => obstacle.zoneId === zone.id && pointHitsObstacle(center, obstacle)),
       `${zone.id}: centro bloqueado`
     );
   }
@@ -74,6 +103,40 @@ test('cada obstáculo tiene id único y queda contenido en su zona', () => {
     assert.ok(obstacle.w > 0 && obstacle.h > 0, `${obstacle.id}: dimensiones inválidas`);
     assert.ok(inside({ x: obstacle.x, y: obstacle.y }, zone), `${obstacle.id}: origen fuera`);
     assert.ok(inside({ x: obstacle.x + obstacle.w, y: obstacle.y + obstacle.h }, zone), `${obstacle.id}: extremo fuera`);
+  }
+});
+
+test('las estaciones están libres y representan exactamente las cinco tareas', () => {
+  assert.deepEqual(new Set(OFFICE_STATIONS.map(({ taskId }) => taskId)), new Set(TASKS.map(({ id }) => id)));
+  for (const station of OFFICE_STATIONS) {
+    assert.ok(getZoneById(station.zoneId), `${station.taskId}: zona inexistente`);
+    assert.ok(![...OFFICE_OBSTACLES, ...OFFICE_WALLS].some((obstacle) => pointHitsObstacle(station, obstacle)), `${station.taskId}: estación bloqueada`);
+  }
+});
+
+test('los puntos de aparición son seguros y quedan en circulación abierta', () => {
+  assert.ok(SPAWN_POINTS.length >= 4);
+  for (const point of SPAWN_POINTS) {
+    assert.ok(inside(point, WORLD_BOUNDS), `spawn fuera del mundo: ${JSON.stringify(point)}`);
+    assert.ok(![...OFFICE_OBSTACLES, ...OFFICE_WALLS].some((obstacle) => pointHitsObstacle(point, obstacle)), `spawn bloqueado: ${JSON.stringify(point)}`);
+  }
+});
+
+test('cada puerta representa una apertura física legible y transitable', () => {
+  assert.equal(new Set(OFFICE_DOORS.map(({ id }) => id)).size, OFFICE_DOORS.length);
+  assert.ok(OFFICE_DOORS.length >= OFFICE_ZONES.length);
+
+  for (const door of OFFICE_DOORS) {
+    assert.ok(getZoneById(door.zoneId), `${door.id}: zona inexistente`);
+    assert.ok(['horizontal', 'vertical'].includes(door.orientation), `${door.id}: orientación inválida`);
+    assert.ok(door.width >= PLAYER_RADIUS * 2 + 36, `${door.id}: apertura menor a 72px`);
+    assert.ok(inside({ x: door.x, y: door.y }, WORLD_BOUNDS), `${door.id}: puerta fuera del mundo`);
+    assert.ok(!OFFICE_OBSTACLES.some((obstacle) => pointHitsObstacle(door, obstacle)), `${door.id}: umbral bloqueado`);
+    assert.ok(doorHasClearLane(door), `${door.id}: no hay trayectoria para el cuerpo del jugador`);
+  }
+
+  for (const zone of OFFICE_ZONES) {
+    assert.ok(OFFICE_DOORS.some((door) => door.zoneId === zone.id), `${zone.id}: habitación sin puerta`);
   }
 });
 

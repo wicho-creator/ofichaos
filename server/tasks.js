@@ -3,6 +3,7 @@
 const TASKS = [
   {
     id: 'cafe',
+    mechanic: 'timing',
     name: 'Preparar café',
     zone: 'cocina',
     type: 'progress',
@@ -11,6 +12,7 @@ const TASKS = [
   },
   {
     id: 'archivos',
+    mechanic: 'order',
     name: 'Ordenar archivos',
     zone: 'archivo',
     type: 'click',
@@ -19,6 +21,7 @@ const TASKS = [
   },
   {
     id: 'correos',
+    mechanic: 'triage',
     name: 'Responder correos',
     zone: 'cubiculos',
     type: 'sequence',
@@ -27,6 +30,8 @@ const TASKS = [
   },
   {
     id: 'reporte',
+    mechanic: 'hold',
+    holdMs: 2400,
     name: 'Imprimir reporte',
     zone: 'recepcion',
     type: 'progress',
@@ -35,6 +40,7 @@ const TASKS = [
   },
   {
     id: 'wifi',
+    mechanic: 'match',
     name: 'Arreglar WiFi',
     zone: 'servidor',
     type: 'sequence',
@@ -43,20 +49,10 @@ const TASKS = [
   }
 ];
 
-// Zonas del mapa: centro (x,y) y dimensiones para colisión/detección
-const ZONES = [
-  { id: 'recepcion', name: 'Recepción', x: 100, y: 100, w: 250, h: 200 },
-  { id: 'cubiculos', name: 'Cubículos', x: 450, y: 100, w: 300, h: 200 },
-  { id: 'juntas', name: 'Sala de Juntas', x: 850, y: 100, w: 250, h: 200 },
-  { id: 'cocina', name: 'Cocina', x: 100, y: 400, w: 200, h: 180 },
-  { id: 'archivo', name: 'Archivo', x: 400, y: 400, w: 200, h: 180 },
-  { id: 'jefe_oficina', name: 'Oficina del Jefe', x: 700, y: 400, w: 200, h: 180 },
-  { id: 'rh', name: 'Recursos Humanos', x: 100, y: 650, w: 250, h: 180 },
-  { id: 'servidor', name: 'Servidor / IT', x: 500, y: 650, w: 250, h: 180 }
-];
-
-const MAP_WIDTH = 1200;
-const MAP_HEIGHT = 900;
+// Zonas, mundo y spawns comparten la fuente física con el cliente.
+const { WORLD_BOUNDS, OFFICE_ZONES: ZONES, SPAWN_POINTS } = require('../shared/world-data');
+const MAP_WIDTH = WORLD_BOUNDS.w;
+const MAP_HEIGHT = WORLD_BOUNDS.h;
 
 /**
  * Inicializa el estado de tareas para una partida.
@@ -83,4 +79,4 @@ function getCompletionPercent(taskStates) {
   return Math.round((done / taskStates.length) * 100);
 }
 
-module.exports = { TASKS, ZONES, MAP_WIDTH, MAP_HEIGHT, initTaskStates, getCompletionPercent };
+module.exports = { TASKS, ZONES, MAP_WIDTH, MAP_HEIGHT, SPAWN_POINTS, initTaskStates, getCompletionPercent };

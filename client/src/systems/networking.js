@@ -27,8 +27,12 @@ export function sendMove(x, y) {
   socket.emit('player:move', { x, y });
 }
 
-export function completeTask(taskId) {
-  socket.emit('task:complete', { taskId });
+export function startTask(taskId) {
+  return new Promise((resolve) => socket.emit('task:start', { taskId }, resolve));
+}
+
+export function sendTaskAction(sessionId, action) {
+  return new Promise((resolve) => socket.emit('task:action', { sessionId, action }, resolve));
 }
 
 export function callMeeting() {
@@ -55,8 +59,8 @@ export function sabotageMorale(targetId) {
   socket.emit('sabotage:morale', { targetId });
 }
 
-export function sabotageCloseDoor(zoneId) {
-  socket.emit('sabotage:close_door', { zoneId });
+export function sabotageCloseDoor(doorId) {
+  socket.emit('sabotage:close_door', { doorId });
 }
 
 

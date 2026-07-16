@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 3000;
 
 // Servir archivos estáticos del cliente
 app.use(express.static(path.join(__dirname, '..', 'client')));
+app.use('/shared', express.static(path.join(__dirname, '..', 'shared')));
 
 // Ruta principal
 app.get('/', (req, res) => {
@@ -31,10 +32,12 @@ io.on('connection', (socket) => {
 
   let currentRoom = null;
   let playerId = socket.id;
+  const text = (value, fallback = '') => typeof value === 'string' ? value : fallback;
 
   // Crear sala
-  socket.on('room:create', ({ name }) => {
-    const playerName = (name || 'Jugador').slice(0, 12);
+  socket.on('room:create', (payload) => {
+    const { name } = payload || {};
+    const playerName = text(name).slice(0, 12) || 'Jugador';
     const roomsObj = roomManager.getAllRooms();
     for (const rCode of Object.keys(roomsObj)) {
       if (roomsObj[rCode].players[playerId]) {
@@ -53,12 +56,18 @@ io.on('connection', (socket) => {
   });
 
   // Unirse a sala
-  socket.on('room:join', ({ code, name }) => {
-    const playerName = (name || 'Jugador').slice(0, 12);
-    const targetCode = code.toUpperCase();
+  socket.on('room:join', (payload) => {
+    const { code, name } = payload || {};
+    const playerName = text(name).slice(0, 12) || 'Jugador';
+    const targetCode = text(code).toUpperCase();
+    const validation = roomManager.validateJoinRoom(targetCode, playerId);
+    if (validation) {
+      socket.emit('error:message', { message: validation.error });
+      return;
+    }
     const roomsObj = roomManager.getAllRooms();
     for (const rCode of Object.keys(roomsObj)) {
-      if (roomsObj[rCode].players[playerId]) {
+      if (rCode !== targetCode && roomsObj[rCode].players[playerId]) {
         roomManager.leaveRoom(rCode, playerId);
         socket.leave(rCode);
         io.to(rCode).emit('room:update', getRoomPayload(rCode));
@@ -66,14 +75,6 @@ io.on('connection', (socket) => {
       }
     }
     const result = roomManager.joinRoom(targetCode, playerId, playerName);
-    if (!result) {
-      socket.emit('error:message', { message: 'Sala no encontrada' });
-      return;
-    }
-    if (result.error) {
-      socket.emit('error:message', { message: result.error });
-      return;
-    }
     currentRoom = targetCode;
     socket.join(currentRoom);
     socket.emit('room:joined', { code: currentRoom, playerId });
@@ -107,44 +108,64 @@ io.on('connection', (socket) => {
   });
 
   // Movimiento de jugador
-  socket.on('player:move', ({ x, y }) => {
+  socket.on('player:move', (payload) => {
     if (!currentRoom) return;
-    const p = roomManager.movePlayer(currentRoom, playerId, x, y);
-    if (p) {
+    const { x, y } = payload || {};
+    const result = roomManager.movePlayerFromClient(currentRoom, playerId, x, y);
+    const p = result.player;
+    if (p && result.moved) {
       socket.to(currentRoom).emit('player:moved', { playerId, x: p.x, y: p.y });
-      if (p.x !== x || p.y !== y) {
-        socket.emit('player:moved', { playerId, x: p.x, y: p.y });
-      }
+    }
+    if (p && (p.x !== x || p.y !== y)) {
+      socket.emit('player:moved', { playerId, x: p.x, y: p.y });
     }
   });
 
-  // Completar tarea
-  socket.on('task:complete', ({ taskId }) => {
+  const emitTaskCompleted = (taskId) => {
+    io.to(currentRoom).emit('task:completed', {
+      taskId,
+      playerName: roomManager.getRoom(currentRoom).players[playerId].name
+    });
+    io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
+  };
+
+  socket.on('task:start', (payload, reply = () => {}) => {
     if (!currentRoom) return;
+    const { taskId } = payload || {};
+    const result = roomManager.startTaskSession(currentRoom, playerId, taskId);
+    if (typeof reply === 'function') reply(result);
+  });
+
+  socket.on('task:action', (payload, reply = () => {}) => {
+    if (!currentRoom) return;
+    const { sessionId, action } = payload || {};
+    const result = roomManager.applyTaskAction(currentRoom, playerId, sessionId, action);
+    if (typeof reply === 'function') reply(result);
+    if (result.completed) emitTaskCompleted(result.task.id);
+  });
+
+  // Compatibilidad fail-closed: el taskId por sí solo nunca completa un minijuego.
+  socket.on('task:complete', (payload) => {
+    if (!currentRoom) return;
+    const { taskId } = payload || {};
     const result = roomManager.completeTask(currentRoom, playerId, taskId);
-    if (result.success) {
-      io.to(currentRoom).emit('task:completed', {
-        taskId,
-        completedBy: playerId,
-        playerName: roomManager.getRoom(currentRoom).players[playerId].name
-      });
-      io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
-    } else {
-      socket.emit('error:message', { message: result.error });
-    }
+    if (result.success) emitTaskCompleted(taskId);
+    else socket.emit('error:message', { message: result.error });
   });
 
   // Sabotaje (jefe/lamebotas)
-  socket.on('sabotage:zone', ({ zoneId }) => {
+  socket.on('sabotage:zone', (payload) => {
     if (!currentRoom) return;
+    const { zoneId } = payload || {};
     const room = roomManager.getRoom(currentRoom);
     if (!room || !room.gameState) return;
     const p = room.players[playerId];
     if (!p || (p.role !== 'jefe' && p.role !== 'lamebotas')) return;
 
     if (!canUseAbility(socket, room, playerId, 'zone')) return;
+    const result = sabotage.sabotageZone(room, zoneId, playerId);
+    if (!result) return socket.emit('error:message', { message: 'Zona inválida' });
     markAbilityUsed(room, playerId, 'zone');
-    sabotage.sabotageZone(room, zoneId, playerId);
     io.to(currentRoom).emit('sabotage:triggered', {
       type: 'zone',
       zoneId,
@@ -154,47 +175,54 @@ io.on('connection', (socket) => {
     console.log(`[SABOTAGE] ${p.name} saboteó zona ${zoneId}`);
   });
 
-  socket.on('sabotage:extra_task', ({ targetId }) => {
+  socket.on('sabotage:extra_task', (payload) => {
     if (!currentRoom) return;
+    const { targetId } = payload || {};
     const room = roomManager.getRoom(currentRoom);
     if (!room || !room.gameState) return;
     const p = room.players[playerId];
     if (!p || p.role !== 'jefe') return;
 
     if (!canUseAbility(socket, room, playerId, 'extra_task')) return;
+    const result = sabotage.assignExtraTask(room, targetId, playerId);
+    if (!result) return socket.emit('error:message', { message: 'Objetivo inválido' });
     markAbilityUsed(room, playerId, 'extra_task');
-    sabotage.assignExtraTask(room, targetId, playerId);
     io.to(targetId).emit('sabotage:extra_task', {});
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
 
-  socket.on('sabotage:morale', ({ targetId }) => {
+  socket.on('sabotage:morale', (payload) => {
     if (!currentRoom) return;
+    const { targetId } = payload || {};
     const room = roomManager.getRoom(currentRoom);
     if (!room || !room.gameState) return;
     const p = room.players[playerId];
     if (!p || p.role !== 'jefe') return;
 
     if (!canUseAbility(socket, room, playerId, 'lower_morale')) return;
+    const result = sabotage.lowerMorale(room, targetId, playerId);
+    if (!result) return socket.emit('error:message', { message: 'Objetivo inválido' });
     markAbilityUsed(room, playerId, 'lower_morale');
-    sabotage.lowerMorale(room, targetId, playerId);
     io.to(targetId).emit('sabotage:morale', {});
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
 
-  socket.on('sabotage:close_door', ({ zoneId }) => {
+  socket.on('sabotage:close_door', (payload) => {
     if (!currentRoom) return;
+    const { doorId } = payload || {};
     const room = roomManager.getRoom(currentRoom);
     if (!room || !room.gameState) return;
     const p = room.players[playerId];
     if (!p || p.role !== 'jefe') return;
 
     if (!canUseAbility(socket, room, playerId, 'close_door')) return;
+    const result = sabotage.closeDoor(room, doorId, playerId);
+    if (!result) return socket.emit('error:message', { message: 'Puerta inválida' });
     markAbilityUsed(room, playerId, 'close_door');
-    sabotage.closeDoor(room, zoneId, playerId);
     io.to(currentRoom).emit('sabotage:door_closed', {
-      zoneId,
-      expires: Date.now() + 15000
+      doorId: result.doorId,
+      zoneId: result.zoneId,
+      expires: result.expires
     });
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
@@ -229,8 +257,9 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
 
-  socket.on('sabotage:block_task', ({ taskId }) => {
+  socket.on('sabotage:block_task', (payload) => {
     if (!currentRoom) return;
+    const { taskId } = payload || {};
     const room = roomManager.getRoom(currentRoom);
     if (!room || !room.gameState) return;
     const p = room.players[playerId];
@@ -260,9 +289,9 @@ io.on('connection', (socket) => {
       socket.emit('error:message', { message: 'No hay sabotaje cercano para reportar' });
       return;
     }
-    markAbilityUsed(room, playerId, 'report_sabotage');
     const result = roomManager.callMeeting(currentRoom, playerId);
     if (result.success) {
+      markAbilityUsed(room, playerId, 'report_sabotage');
       io.to(currentRoom).emit('sabotage:reported', {
         reportedBy: playerId,
         playerName: p.name,
@@ -293,8 +322,9 @@ io.on('connection', (socket) => {
   });
 
   // Chat de reunión
-  socket.on('meeting:chat', ({ message }) => {
+  socket.on('meeting:chat', (payload) => {
     if (!currentRoom) return;
+    const { message } = payload || {};
     const room = roomManager.getRoom(currentRoom);
     if (!room || !room.gameState || room.gameState.phase !== 'meeting') return;
     const p = room.players[playerId];
@@ -302,13 +332,14 @@ io.on('connection', (socket) => {
     io.to(currentRoom).emit('meeting:chat', {
       playerId,
       playerName: p.name,
-      message: String(message).slice(0, 200)
+      message: text(message).slice(0, 200)
     });
   });
 
   // Votar
-  socket.on('vote:cast', ({ targetId }) => {
+  socket.on('vote:cast', (payload) => {
     if (!currentRoom) return;
+    const { targetId } = payload || {};
     const result = roomManager.votePlayer(currentRoom, playerId, targetId);
     if (result.success) {
       socket.emit('vote:confirmed', { targetId });
@@ -365,6 +396,10 @@ setInterval(() => {
 
 function canUseAbility(socket, room, playerId, ability) {
   const player = room.players[playerId];
+  if (room.gameState?.phase !== 'playing') {
+    socket.emit('error:message', { message: 'Habilidad no permitida en esta fase' });
+    return false;
+  }
   if (player.suspendedUntil && Date.now() < player.suspendedUntil) {
     socket.emit('error:message', { message: 'Habilidad bloqueada: Estás suspendido.' });
     return false;

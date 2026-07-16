@@ -1,7 +1,11 @@
 // roomManager.js — Gestión de salas privadas con códigos
 
 const { startGame, tickGame, startMeeting, startVoting, castVote, endVoting, updateSecondaryObjectives } = require('./gameState');
-const { ZONES } = require('./tasks');
+const { randomUUID } = require('node:crypto');
+const { TASKS } = require('./tasks');
+const { OFFICE_STATIONS } = require('../shared/world-data');
+const { createMinigameState, reduceMinigame } = require('../shared/minigames');
+const { movementBlocked, interactionBlocked } = require('./worldCollision');
 
 const rooms = {}; // roomCode -> room
 
@@ -40,15 +44,18 @@ function createRoom(playerId, playerName) {
   return rooms[code];
 }
 
-function joinRoom(code, playerId, playerName) {
+function validateJoinRoom(code, playerId) {
   const room = rooms[code];
-  if (!room) return null;
-  if (room.gameState && room.gameState.phase !== 'lobby') {
-    return { error: 'La partida ya empezó' };
-  }
-  if (Object.keys(room.players).length >= 12) {
-    return { error: 'Sala llena' };
-  }
+  if (!room) return { error: 'Sala no encontrada' };
+  if (room.gameState && room.gameState.phase !== 'lobby') return { error: 'La partida ya empezó' };
+  if (!room.players[playerId] && Object.keys(room.players).length >= 12) return { error: 'Sala llena' };
+  return null;
+}
+
+function joinRoom(code, playerId, playerName) {
+  const error = validateJoinRoom(code, playerId);
+  if (error) return error;
+  const room = rooms[code];
   room.players[playerId] = {
     id: playerId,
     name: playerName,
@@ -93,6 +100,7 @@ function getAllRooms() {
 function startGameInRoom(code) {
   const room = rooms[code];
   if (!room) return { error: 'Sala no encontrada' };
+  if (room.gameState) return { error: 'La partida ya empezó' };
   const playerCount = Object.keys(room.players).length;
   if (playerCount < 4) {
     return { error: 'Se necesitan mínimo 4 jugadores' };
@@ -109,8 +117,10 @@ function movePlayer(code, playerId, x, y) {
     return p;
   }
   const now = Date.now();
-  if (p.suspendedUntil && now < p.suspendedUntil) return p;
-  if (room.gameState && (room.gameState.phase === 'meeting' || room.gameState.phase === 'voting')) return p;
+  if (room.gameState?.phase !== 'playing' || (p.suspendedUntil && now < p.suspendedUntil)) {
+    delete p.taskSession;
+    return p;
+  }
 
   const isBurnout = p.burnoutUntil && now < p.burnoutUntil;
   const baseSpeed = 250;
@@ -120,12 +130,7 @@ function movePlayer(code, playerId, x, y) {
   const clampedX = Math.max(20, Math.min(1180, x));
   const clampedY = Math.max(20, Math.min(880, y));
 
-  if (!p.lastMoveTime) {
-    p.lastMoveTime = now;
-    p.x = clampedX;
-    p.y = clampedY;
-    return p;
-  }
+  if (!p.lastMoveTime) p.lastMoveTime = now;
 
   // Limitar el delta de tiempo para evitar teletransporte después de inactividad o lag extremo
   const maxDt = 0.25;
@@ -137,10 +142,9 @@ function movePlayer(code, playerId, x, y) {
   const maxAllowedDist = speed * dt * tolerance;
   const minDistBuffer = 15;
 
-  if (!p.bypassSpeedCheck && dist > maxAllowedDist + minDistBuffer) {
-    console.log(`[Anti-Cheat] Movimiento rechazado para ${p.name}. Distancia: ${dist.toFixed(1)}, Máx permitida: ${(maxAllowedDist + minDistBuffer).toFixed(1)}, dt: ${dt.toFixed(3)}s`);
-    return p;
-  }
+  if (!p.bypassSpeedCheck && dist > maxAllowedDist + minDistBuffer) return p;
+
+  if (movementBlocked(p, { x: clampedX, y: clampedY }, room.gameState?.activeSabotages)) return p;
 
   if (isBurnout) {
     p.x = clampedX * 0.5 + p.x * 0.5;
@@ -149,10 +153,22 @@ function movePlayer(code, playerId, x, y) {
     p.x = clampedX;
     p.y = clampedY;
   }
+  if (p.taskSession && validateTaskAccess(code, playerId, p.taskSession.taskId, now).error) delete p.taskSession;
   return p;
 }
 
-function completeTask(code, playerId, taskId) {
+function movePlayerFromClient(code, playerId, x, y, now = Date.now()) {
+  const player = rooms[code]?.players[playerId];
+  if (!player) return { player: null, moved: false };
+  if (player.lastClientMoveAt != null && now - player.lastClientMoveAt < 20) return { rateLimited: true };
+  player.lastClientMoveAt = now;
+  const beforeX = player.x;
+  const beforeY = player.y;
+  const result = movePlayer(code, playerId, x, y);
+  return { player: result, moved: !!result && (result.x !== beforeX || result.y !== beforeY) };
+}
+
+function validateTaskAccess(code, playerId, taskId, now = Date.now()) {
   const room = rooms[code];
   if (!room || !room.gameState) return { error: 'No hay partida activa' };
   if (room.gameState.phase !== 'playing') {
@@ -160,32 +176,116 @@ function completeTask(code, playerId, taskId) {
   }
   const task = room.gameState.taskStates.find((t) => t.id === taskId);
   if (!task || task.completed) return { error: 'Tarea no disponible' };
-  if (task.blockedUntil && Date.now() < task.blockedUntil) return { error: 'Tarea bloqueada temporalmente por sabotaje' };
+  if (task.blockedUntil && now < task.blockedUntil) return { error: 'Tarea bloqueada temporalmente por sabotaje' };
   const p = room.players[playerId];
   if (!p) return { error: 'Jugador no encontrado' };
   if (p.role !== 'empleado') return { error: 'Rol no autorizado para completar tareas' };
-  if (p.burnoutUntil && Date.now() < p.burnoutUntil) return { error: 'En burnout' };
+  if (p.morale <= 0 || (p.burnoutUntil && now < p.burnoutUntil)) return { error: 'En burnout' };
 
-  if (task.zone) {
-    const zone = ZONES.find((z) => z.id === task.zone);
-    if (zone) {
-      const zoneCenterX = zone.x + zone.w / 2;
-      const zoneCenterY = zone.y + zone.h / 2;
-      const dist = Math.hypot(p.x - zoneCenterX, p.y - zoneCenterY);
-      const THRESHOLD = 180; // server tolerance (approx 170px + leeway)
-      if (dist > THRESHOLD) {
-        return { error: 'Demasiado lejos de la tarea' };
-      }
-    }
+  const station = OFFICE_STATIONS.find(({ taskId: id }) => id === taskId);
+  if (!station) return { error: 'Estación de tarea no encontrada' };
+  const distance = Math.hypot(p.x - station.x, p.y - station.y);
+  if (distance > 170 || interactionBlocked(p, station, room.gameState.activeSabotages)) {
+    return { error: 'Demasiado lejos de la tarea' };
+  }
+  return { room, task, player: p };
+}
+
+function startTaskSession(code, playerId, taskId, now = Date.now()) {
+  const access = validateTaskAccess(code, playerId, taskId, now);
+  if (access.error) return access;
+  const definition = TASKS.find(({ id }) => id === taskId);
+  if (!definition?.mechanic) return { error: 'Minijuego no disponible' };
+  const session = {
+    id: randomUUID(),
+    taskId,
+    state: createMinigameState(definition),
+    startedAt: now,
+    lastActionAt: now
+  };
+  access.player.taskSession = session;
+  return { sessionId: session.id, state: session.state };
+}
+
+function sanitizeTaskAction(session, action, now) {
+  if (!action || typeof action.type !== 'string') return null;
+  if (session.state.mechanic === 'timing' && action.type === 'stop') {
+    const phase = (now - session.startedAt) % 1900;
+    const t = phase <= 950 ? phase / 950 : (1900 - phase) / 950;
+    return { type: 'stop', position: -(Math.cos(Math.PI * t) - 1) / 2 };
+  }
+  if (session.state.mechanic === 'order' && action.type === 'pick') {
+    return { type: 'pick', value: typeof action.value === 'number' ? action.value : NaN };
+  }
+  if (session.state.mechanic === 'triage' && action.type === 'choose') {
+    return { type: 'choose', value: typeof action.value === 'string' ? action.value : '' };
+  }
+  if (session.state.mechanic === 'match' && action.type === 'connect') {
+    return {
+      type: 'connect',
+      from: typeof action.from === 'string' ? action.from : '',
+      to: typeof action.to === 'string' ? action.to : ''
+    };
+  }
+  if (session.state.mechanic === 'hold' && action.type === 'hold') return { type: 'hold', active: Boolean(action.active) };
+  if (session.state.mechanic === 'hold' && action.type === 'tick' && session.state.active) {
+    const delta = Math.max(0, now - session.lastActionAt);
+    return delta <= 250 ? { type: 'tick', delta } : { type: 'hold', active: false };
+  }
+  return null;
+}
+
+function applyTaskAction(code, playerId, sessionId, action, now = Date.now()) {
+  const room = rooms[code];
+  const player = room?.players[playerId];
+  const session = player?.taskSession;
+  if (!session || session.id !== sessionId) return { error: 'Sesión de minijuego inválida' };
+  if (now - session.startedAt > 120000) {
+    delete player.taskSession;
+    return { error: 'Sesión de minijuego inválida' };
+  }
+  const access = validateTaskAccess(code, playerId, session.taskId, now);
+  if (access.error) {
+    delete player.taskSession;
+    return access;
+  }
+  const safeAction = sanitizeTaskAction(session, action, now);
+  if (!safeAction) return { error: 'Acción de minijuego inválida' };
+  if (session.state.mechanic === 'timing' && session.lastTimingActionAt != null && now - session.lastTimingActionAt < 600) {
+    return { success: true, completed: false, state: session.state };
+  }
+  if (session.state.mechanic === 'timing') session.lastTimingActionAt = now;
+  const discrete = ['order', 'triage', 'match'].includes(session.state.mechanic);
+  if (discrete && session.lastDiscreteActionAt != null && now - session.lastDiscreteActionAt < 120) {
+    return { success: true, completed: false, state: session.state };
+  }
+  if (discrete) session.lastDiscreteActionAt = now;
+  session.state = reduceMinigame(session.state, safeAction);
+  session.lastActionAt = now;
+  if (!session.state.completed) return { success: true, completed: false, state: session.state };
+  const result = completeTask(code, playerId, session.taskId);
+  return result.success ? { ...result, completed: true } : result;
+}
+
+function completeTask(code, playerId, taskId) {
+  const access = validateTaskAccess(code, playerId, taskId);
+  if (access.error) return access;
+  const { room, task, player: p } = access;
+  if (p.taskSession?.taskId !== taskId || !p.taskSession.state.completed) {
+    return { error: 'Minijuego no completado' };
   }
 
   task.completed = true;
   task.completedBy = playerId;
+  for (const other of Object.values(room.players)) {
+    if (other.taskSession?.taskId === taskId) delete other.taskSession;
+  }
   p.tasksCompleted = (p.tasksCompleted || 0) + 1;
   p.completedTaskZones = p.completedTaskZones || [];
   if (task.zone && !p.completedTaskZones.includes(task.zone)) p.completedTaskZones.push(task.zone);
   p.morale = Math.min(100, p.morale + 5);
   room.gameState.points[playerId] = (room.gameState.points[playerId] || 0) + 10;
+  delete p.taskSession;
   updateSecondaryObjectives(room);
 
   return { success: true, task };
@@ -201,6 +301,7 @@ function callMeeting(code, playerId) {
   if (assignment && assignment.meetingCalled) {
     return { error: 'Ya usaste tu reunión' };
   }
+  for (const player of Object.values(room.players)) delete player.taskSession;
   startMeeting(room, playerId);
   return { success: true };
 }
@@ -237,12 +338,16 @@ function tickRoom(code) {
 module.exports = {
   createRoom,
   joinRoom,
+  validateJoinRoom,
   leaveRoom,
   getRoom,
   getAllRooms,
   startGameInRoom,
   movePlayer,
+  movePlayerFromClient,
   completeTask,
+  startTaskSession,
+  applyTaskAction,
   callMeeting,
   votePlayer,
   tickRoom

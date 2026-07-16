@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { after } = require('node:test');
 const { io } = require('socket.io-client');
+const { calculatePoints, castVote, endVoting, isSecondaryObjectiveComplete } = require('../server/gameState');
+const { OBJECTIVES_BY_ROLE, SECONDARY_OBJECTIVES, assignRoles } = require('../server/roles');
 const http = require('http');
 
 // Capture http server instance to close it cleanly in teardown
@@ -53,9 +55,13 @@ global.Phaser = {
           destroy() { this.active = false; },
           active: true
         }),
-        container: (x, y, list) => ({
+        container: (x, y, list = []) => ({
           x, y, list,
+          add(items) { this.list.push(...(Array.isArray(items) ? items : [items])); return this; },
           setAlpha(a) { this.alpha = a; return this; },
+          setScrollFactor() { return this; },
+          setDepth() { return this; },
+          setPosition(px, py) { this.x = px; this.y = py; return this; },
           destroy() { this.active = false; },
           active: true
         }),
@@ -83,7 +89,14 @@ global.Phaser = {
           x, y, width: w, height: h, color,
           setOrigin(o) { this.origin = o; return this; },
           setStrokeStyle(w, col) { this.strokeWidth = w; this.strokeColor = col; return this; },
-          setFillStyle(col) { this.color = col; return this; },
+          setFillStyle(col, alpha) { this.color = col; this.alpha = alpha; return this; },
+          setInteractive() { return this; },
+          disableInteractive() { return this; },
+          on(event, callback) { this.listeners = this.listeners || {}; this.listeners[event] = callback; return this; },
+          removeAllListeners() { this.listeners = {}; return this; },
+          setPosition(px, py) { this.x = px; this.y = py; return this; },
+          setSize(pw, ph) { this.width = pw; this.height = ph; return this; },
+          setAlpha(alpha) { this.alpha = alpha; return this; },
           destroy() { this.active = false; },
           active: true
         })
@@ -101,7 +114,9 @@ global.Phaser = {
         keyboard: {
           createCursorKeys: () => ({ left: {}, right: {}, up: {}, down: {} }),
           addKeys: () => ({ W: {}, A: {}, S: {}, D: {} }),
-          addKey: () => ({})
+          addKey: () => ({}),
+          on() {},
+          off() {}
         },
         on: () => {}
       };
@@ -115,7 +130,7 @@ global.Phaser = {
         }
       };
       this.tweens = {
-        add() {}
+        add(config) { return { config, stop() {} }; }
       };
     }
   },
@@ -153,17 +168,47 @@ const once = (socket, event, timeout = 1000) =>
     });
   });
 
-const { ZONES } = require('../server/tasks');
+const emitAck = (socket, event, payload) => new Promise((resolve) => socket.emit(event, payload, resolve));
 
-function positionPlayerAtTask(room, playerId, taskId) {
-  const task = room.gameState.taskStates.find(t => t.id === taskId);
-  if (task && task.zone) {
-    const zone = ZONES.find(z => z.id === task.zone);
-    if (zone) {
-      room.players[playerId].x = zone.x + zone.w / 2;
-      room.players[playerId].y = zone.y + zone.h / 2;
+async function completeMinigame(socket, taskId) {
+  const completed = once(socket, 'task:completed', 4000);
+  const started = await emitAck(socket, 'task:start', { taskId });
+  assert.ok(started.sessionId, started.error);
+  const act = (action) => emitAck(socket, 'task:action', { sessionId: started.sessionId, action });
+  if (taskId === 'cafe') {
+    await delay(475);
+    const result = await act({ type: 'stop' });
+    assert.equal(result?.completed, true, 'café no alcanzó la franja autoritativa');
+  } else if (taskId === 'archivos') {
+    for (const value of [1, 2, 3, 4]) {
+      await act({ type: 'pick', value });
+      await delay(130);
+    }
+  } else if (taskId === 'correos') {
+    for (const value of ['responder', 'archivar', 'responder']) {
+      await act({ type: 'choose', value });
+      await delay(130);
+    }
+  } else if (taskId === 'reporte') {
+    await act({ type: 'hold', active: true });
+    for (let elapsed = 0; elapsed < 2500; elapsed += 100) {
+      await delay(100);
+      await act({ type: 'tick' });
+    }
+  } else if (taskId === 'wifi') {
+    for (const id of ['A', 'B', 'C', 'D']) {
+      await act({ type: 'connect', from: id, to: id });
+      await delay(130);
     }
   }
+  return completed;
+}
+
+const { OFFICE_STATIONS } = require('../shared/world-data');
+
+function positionPlayerAtTask(room, playerId, taskId) {
+  const station = OFFICE_STATIONS.find(({ taskId: id }) => id === taskId);
+  if (station) Object.assign(room.players[playerId], { x: station.x, y: station.y });
 }
 
 function forcePlayerAsEmployee(room, playerId) {
@@ -361,13 +406,25 @@ test('TC-T1-06: Movement broadcast', async () => {
   const { clients, roomCode } = await setupGame(4);
   
   const movePromise = once(clients[1], 'player:moved');
-  clients[0].emit('player:move', { x: 200, y: 300 });
+  clients[0].emit('player:move', { x: 440, y: 350 });
 
   const moved = await movePromise;
   assert.strictEqual(moved.playerId, clients[0].id);
-  assert.strictEqual(moved.x, 200);
-  assert.strictEqual(moved.y, 300);
+  assert.strictEqual(moved.x, 440);
+  assert.strictEqual(moved.y, 350);
 
+  disconnectClients(clients);
+});
+
+test('TC-T1-06b: un rejoin inválido conserva la sala actual', async () => {
+  const { clients, roomCode } = await setupGame(4);
+  const room = roomManager.getRoom(roomCode);
+  const error = once(clients[0], 'error:message');
+
+  clients[0].emit('room:join', { code: 'ZZZZZ', name: 'Host' });
+
+  assert.equal((await error).message, 'Sala no encontrada');
+  assert.ok(room.players[clients[0].id]);
   disconnectClients(clients);
 });
 
@@ -383,14 +440,17 @@ test('TC-T1-07: Move block in meeting', async () => {
 
   const originalX = room.players[clients[0].id].x;
   const originalY = room.players[clients[0].id].y;
+  let broadcasts = 0;
+  clients[1].on('player:moved', () => { broadcasts += 1; });
 
-  // Emit move
-  clients[0].emit('player:move', { x: originalX + 20, y: originalY + 20 });
+  for (let index = 0; index < 100; index += 1) {
+    clients[0].emit('player:move', { x: originalX + 20 + index, y: originalY + 20 });
+  }
   await delay(100);
 
-  // Position should not change
   assert.strictEqual(room.players[clients[0].id].x, originalX);
   assert.strictEqual(room.players[clients[0].id].y, originalY);
+  assert.strictEqual(broadcasts, 0);
 
   disconnectClients(clients);
 });
@@ -458,12 +518,9 @@ test('TC-T1-11: Task completion state', async () => {
   const empClient = clients.find(c => c.id === empId);
 
   positionPlayerAtTask(room, empId, 'cafe');
-  const taskCompletePromise = once(empClient, 'task:completed');
-  empClient.emit('task:complete', { taskId: 'cafe' });
-
-  const payload = await taskCompletePromise;
+  const payload = await completeMinigame(empClient, 'cafe');
   assert.strictEqual(payload.taskId, 'cafe');
-  assert.strictEqual(payload.completedBy, empId);
+  assert.strictEqual(Object.hasOwn(payload, 'completedBy'), false);
 
   const t = room.gameState.taskStates.find(x => x.id === 'cafe');
   assert.strictEqual(t.completed, true);
@@ -481,13 +538,11 @@ test('TC-T1-12: Tasks percent calculation', async () => {
 
   // Complete cafe
   positionPlayerAtTask(room, empId, 'cafe');
-  empClient.emit('task:complete', { taskId: 'cafe' });
-  await once(empClient, 'task:completed');
+  await completeMinigame(empClient, 'cafe');
 
   // Complete archivos
   positionPlayerAtTask(room, empId, 'archivos');
-  empClient.emit('task:complete', { taskId: 'archivos' });
-  await once(empClient, 'task:completed');
+  await completeMinigame(empClient, 'archivos');
 
   // 2 out of 5 tasks is 40%
   const gs = room.gameState;
@@ -510,16 +565,14 @@ test('TC-T1-13: Task morale gain', async () => {
   player.morale = 80;
 
   positionPlayerAtTask(room, empId, 'cafe');
-  empClient.emit('task:complete', { taskId: 'cafe' });
-  await once(empClient, 'task:completed');
+  await completeMinigame(empClient, 'cafe');
 
   assert.strictEqual(player.morale, 85);
 
   // check capped at 100
   player.morale = 98;
   positionPlayerAtTask(room, empId, 'archivos');
-  empClient.emit('task:complete', { taskId: 'archivos' });
-  await once(empClient, 'task:completed');
+  await completeMinigame(empClient, 'archivos');
   assert.strictEqual(player.morale, 100);
 
   disconnectClients(clients);
@@ -558,6 +611,32 @@ test('TC-T1-15: Role assignment: 5 players', async () => {
 });
 
 test('TC-T1-16: Objectives assignment', async () => {
+  const implemented = new Set(['meeting_no_votes', 'cause_sanction', 'kitchen_task', 'no_burnout', 'accuse_correct']);
+  assert.deepStrictEqual(new Set(SECONDARY_OBJECTIVES.map(({ id }) => id)), implemented);
+
+  for (let run = 0; run < 100; run += 1) {
+    const assignments = assignRoles(['a', 'b', 'c', 'd', 'e']);
+    for (const assignment of Object.values(assignments)) {
+      assert.ok(OBJECTIVES_BY_ROLE[assignment.role].includes(assignment.secondaryObjective));
+    }
+  }
+
+  const scoreRoom = {
+    players: {
+      empleado: { role: 'empleado', tasksCompleted: 0, secondaryObjective: 'no_burnout' },
+      jefe: { role: 'jefe', secondaryObjective: 'no_burnout' },
+      lamebotas: { role: 'lamebotas', sanctions: 2, secondaryObjective: 'no_burnout' }
+    },
+    gameState: {
+      burnedOutPlayers: new Set(),
+      points: {},
+      sabotageStats: { empleado: {}, jefe: {}, lamebotas: {} },
+      secondaryObjectiveStatus: {}
+    }
+  };
+  calculatePoints(scoreRoom, { winners: 'nadie' });
+  assert.deepStrictEqual(scoreRoom.gameState.points, { empleado: 20, jefe: 20, lamebotas: 20 });
+
   const { clients, roomCode } = await setupGame(4);
   const room = roomManager.getRoom(roomCode);
 
@@ -638,6 +717,53 @@ test('TC-T1-19: Emergency meeting limit', async () => {
   disconnectClients(clients);
 });
 
+test('el primer voto es definitivo durante la ronda', () => {
+  const room = {
+    players: { a: {}, b: {}, c: {} },
+    gameState: { phase: 'voting', votes: {} }
+  };
+
+  assert.equal(castVote(room, 'a', 'b'), true);
+  assert.equal(castVote(room, 'a', 'c'), false);
+  assert.equal(castVote(room, 'b', 'skip'), true);
+  assert.equal(castVote(room, 'b', 'c'), false);
+  assert.deepEqual(room.gameState.votes, { a: 'b', b: 'skip' });
+});
+
+test('votos fantasma y sanciones sin jugador real se rechazan', () => {
+  const room = {
+    players: {
+      jefe: { role: 'jefe', secondaryObjective: 'cause_sanction' },
+      empleado: { role: 'empleado', morale: 100, sanctions: 0 }
+    },
+    gameState: {
+      phase: 'voting', votes: {}, sanctions: {}, secondaryObjectiveStatus: {}
+    }
+  };
+
+  assert.equal(castVote(room, 'fantasma', 'empleado'), false);
+  assert.deepStrictEqual(room.gameState.votes, {});
+  assert.equal(castVote(room, 'jefe', 'empleado'), true);
+  delete room.players.empleado;
+  const result = endVoting(room);
+
+  assert.equal(result.sanctioned, null);
+  assert.equal(room.players.jefe.causedSanction, undefined);
+  assert.equal(isSecondaryObjectiveComplete(room, 'jefe'), false);
+});
+
+test('un auto-voto no acredita causar la sanción de otro jugador', () => {
+  const room = {
+    players: { jefe: { role: 'jefe', morale: 100, sanctions: 0, secondaryObjective: 'cause_sanction' } },
+    gameState: {
+      phase: 'voting', votes: { jefe: 'jefe' }, sanctions: {}, secondaryObjectiveStatus: {}
+    }
+  };
+
+  assert.equal(endVoting(room).sanctioned, 'jefe');
+  assert.equal(room.players.jefe.causedSanction, undefined);
+});
+
 test('TC-T1-20: Voting phase transition', async () => {
   const { clients, roomCode } = await setupGame(4);
   const room = roomManager.getRoom(roomCode);
@@ -694,6 +820,14 @@ test('TC-T1-22: Sabotage trigger (Zone)', async () => {
   assert.deepStrictEqual(Object.keys(trigger).sort(), ['expires', 'type', 'zoneId']);
   assert.deepStrictEqual(Object.keys(update.activeSabotages[0]).filter(key => update.activeSabotages[0][key] !== undefined).sort(), ['expires', 'type', 'zoneId']);
   assert.ok(room.gameState.activeSabotages.find(s => s.zoneId === 'cocina'));
+
+  room.gameState.phase = 'meeting';
+  room.players[jefeId].abilityCooldowns = {};
+  const before = room.gameState.activeSabotages.length;
+  const phaseError = once(jefeClient, 'error:message');
+  jefeClient.emit('sabotage:zone', { zoneId: 'archivo' });
+  assert.match((await phaseError).message, /fase/i);
+  assert.strictEqual(room.gameState.activeSabotages.length, before);
 
   disconnectClients(clients);
 });
@@ -823,14 +957,13 @@ test('TC-T2-05: Employee victory trigger', async () => {
   const empId = Object.keys(room.players).find(pid => room.players[pid].role === 'empleado');
   const empClient = clients.find(c => c.id === empId);
 
-  const endPromises = clients.map(c => once(c, 'game:ended'));
+  const endPromises = clients.map(c => once(c, 'game:ended', 7000));
 
   // Complete 4 out of 5 tasks (80%)
   const taskIds = ['cafe', 'archivos', 'correos', 'reporte'];
   for (const tid of taskIds) {
     positionPlayerAtTask(room, empId, tid);
-    empClient.emit('task:complete', { taskId: tid });
-    await once(empClient, 'task:completed');
+    await completeMinigame(empClient, tid);
   }
 
   const ends = await Promise.all(endPromises);
@@ -875,8 +1008,7 @@ test('TC-T2-08: Reject double complete', async () => {
   const empClient = clients.find(c => c.id === empId);
 
   positionPlayerAtTask(room, empId, 'cafe');
-  empClient.emit('task:complete', { taskId: 'cafe' });
-  await once(empClient, 'task:completed');
+  await completeMinigame(empClient, 'cafe');
 
   // Complete again
   empClient.emit('task:complete', { taskId: 'cafe' });
@@ -909,17 +1041,17 @@ test('TC-T2-10: Burnout movement penalty', async () => {
   room.players[empId].morale = 0;
   await delay(100); // activates burnout
 
-  // Original coordinates
-  room.players[empId].x = 100;
-  room.players[empId].y = 100;
+  // Original coordinates in the open central corridor.
+  room.players[empId].x = 430;
+  room.players[empId].y = 350;
   room.players[empId].lastMoveTime = Date.now() - 5000;
   room.players[empId].bypassSpeedCheck = true;
 
-  // Move player to 200, 200 (expected speed penalty reduces displacement to half: 150, 150)
-  roomManager.movePlayer(roomCode, empId, 200, 200);
+  // Move 20 px; burnout halves the displacement.
+  roomManager.movePlayer(roomCode, empId, 450, 350);
 
-  assert.strictEqual(room.players[empId].x, 150);
-  assert.strictEqual(room.players[empId].y, 150);
+  assert.strictEqual(room.players[empId].x, 440);
+  assert.strictEqual(room.players[empId].y, 350);
 
   disconnectClients(clients);
 });
@@ -1206,8 +1338,9 @@ test('TC-T2-23: Door lockout expiration', async () => {
   const jefeClient = clients.find(c => c.id === jefeId);
 
   room.players[jefeId].abilityCooldowns = {};
+  Object.assign(room.players[jefeId], { x: 255, y: 375 });
 
-  jefeClient.emit('sabotage:close_door', { zoneId: 'cocina' });
+  jefeClient.emit('sabotage:close_door', { doorId: 'cocina-norte' });
   await once(jefeClient, 'sabotage:door_closed');
 
   assert.ok(room.gameState.activeSabotages.find(s => s.zoneId === 'cocina' && s.type === 'close_door'));
@@ -1241,6 +1374,13 @@ test('TC-T2-24: Report sabotage action', async () => {
   await once(jefeClient, 'sabotage:triggered');
 
   room.players[empId].abilityCooldowns = {};
+  room.gameState.roleAssignments[empId].meetingCalled = true;
+  const rejected = once(empClient, 'error:message');
+  empClient.emit('sabotage:report');
+  assert.match((await rejected).message, /reunión/i);
+  assert.deepEqual(room.players[empId].abilityCooldowns, {});
+
+  room.gameState.roleAssignments[empId].meetingCalled = false;
   empClient.emit('sabotage:report');
   
   const report = await once(empClient, 'sabotage:reported');
@@ -1271,20 +1411,20 @@ test('TC-T3-01: HUD responsive adjustments layout math', async () => {
 });
 
 test('TC-T3-03: Interactive task overlays panel verification', async () => {
-  const uiModule = await import('../client/src/systems/ui.js');
   const sceneModule = await import('../client/src/scenes/GameScene.js');
+  const { TASKS } = await import('../client/src/systems/tasks.js');
 
   const scene = new sceneModule.GameScene();
   scene.scale = { width: 1024, height: 768 };
   scene.gameState = { tasks: [] };
-  
-  // Test opening a task panel registers activeTaskPanel items
-  const task = { id: 'cafe', name: 'Cafe', zone: 'cocina', type: 'progress', duration: 1000, description: 'Prep' };
-  scene.openTaskPanel(task);
+  scene.roomCode = 'DEMO';
+
+  scene.openTaskPanel(TASKS.find(({ id }) => id === 'cafe'));
 
   assert.ok(scene.activeTaskPanel);
   assert.strictEqual(scene.activeTaskPanel.taskId, 'cafe');
-  assert.ok(scene.activeTaskPanel.elements.length > 0);
+  assert.strictEqual(scene.activeTaskPanel.task.mechanic, 'timing');
+  assert.strictEqual(scene.activeTaskPanel.state.completed, false);
 
   scene.closeTaskPanel();
   assert.strictEqual(scene.activeTaskPanel, null);
@@ -1464,6 +1604,22 @@ test('TC-T5-03: Unauthorized sabotage attempts', async () => {
   const empClient = clients.find(c => c.id === empId);
 
   const jefeId = Object.keys(room.players).find(pid => room.players[pid].role === 'jefe');
+  const jefeClient = clients.find(c => c.id === jefeId);
+
+  room.players[jefeId].abilityCooldowns = {};
+  const statsBefore = structuredClone(room.gameState.sabotageStats[jefeId]);
+  for (const [event, payload] of [
+    ['sabotage:zone', { zoneId: { toString: null } }],
+    ['sabotage:extra_task', { targetId: { toString: null } }],
+    ['sabotage:morale', { targetId: { toString: null } }]
+  ]) {
+    const rejected = once(jefeClient, 'error:message');
+    jefeClient.emit(event, payload);
+    assert.match((await rejected).message, /inválid/i);
+  }
+  assert.deepEqual(room.players[jefeId].abilityCooldowns, {});
+  assert.deepEqual(room.gameState.sabotageStats[jefeId], statsBefore);
+  assert.deepEqual(room.gameState.activeSabotages, []);
 
   // Employee tries to trigger jefe's morale sabotage targeting the jefe
   const origMorale = room.players[jefeId].morale;
@@ -1474,7 +1630,7 @@ test('TC-T5-03: Unauthorized sabotage attempts', async () => {
   assert.strictEqual(room.players[jefeId].morale, origMorale, 'Employee must not be able to trigger Boss sabotage:morale');
 
   // Employee tries to close doors
-  empClient.emit('sabotage:close_door', { zoneId: 'cocina' });
+  empClient.emit('sabotage:close_door', { doorId: 'cocina-norte' });
   await delay(100);
   const hasDoorSabotage = room.gameState.activeSabotages.some(s => s.type === 'close_door');
   assert.strictEqual(hasDoorSabotage, false, 'Employee must not be able to trigger close_door sabotage');

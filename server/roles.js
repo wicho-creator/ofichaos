@@ -38,15 +38,18 @@ const ROLES = {
 };
 
 const SECONDARY_OBJECTIVES = [
-  { id: 'tasks_uninterrupted', text: 'Completar 3 tareas sin ser interrumpido' },
   { id: 'meeting_no_votes', text: 'Participar en una reunión y no recibir votos' },
   { id: 'cause_sanction', text: 'Hacer que otro jugador sea sancionado' },
   { id: 'kitchen_task', text: 'Completar una tarea en la cocina' },
   { id: 'no_burnout', text: 'Sobrevivir toda la partida sin burnout' },
-  { id: 'accuse_correct', text: 'Acusar correctamente a un saboteador' },
-  { id: 'help_coworker', text: 'Ayudar a otro jugador a completar una tarea' },
-  { id: 'avoid_boss', text: 'Evitar estar cerca del jefe por 2 minutos' }
+  { id: 'accuse_correct', text: 'Acusar correctamente a un saboteador' }
 ];
+
+const OBJECTIVES_BY_ROLE = Object.freeze({
+  empleado: Object.freeze(['meeting_no_votes', 'kitchen_task', 'no_burnout', 'accuse_correct']),
+  jefe: Object.freeze(['cause_sanction', 'no_burnout']),
+  lamebotas: Object.freeze(['cause_sanction', 'no_burnout'])
+});
 
 /**
  * Asigna roles a los jugadores de una sala.
@@ -75,8 +78,9 @@ function assignRoles(playerIds) {
       role = ROLES.EMPLEADO.id;
     }
 
-    const secondaryObjective =
-      SECONDARY_OBJECTIVES[Math.floor(Math.random() * SECONDARY_OBJECTIVES.length)];
+    const pool = OBJECTIVES_BY_ROLE[role];
+    const objectiveId = pool[Math.floor(Math.random() * pool.length)];
+    const secondaryObjective = SECONDARY_OBJECTIVES.find(({ id }) => id === objectiveId);
 
     assignments[pid] = {
       role,
@@ -91,4 +95,4 @@ function assignRoles(playerIds) {
   return assignments;
 }
 
-module.exports = { ROLES, SECONDARY_OBJECTIVES, assignRoles };
+module.exports = { ROLES, SECONDARY_OBJECTIVES, OBJECTIVES_BY_ROLE, assignRoles };

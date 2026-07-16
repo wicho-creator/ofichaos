@@ -154,9 +154,9 @@ La escala espacial es 4, 8, 12, 16, 24, 32 y 48 px. No introducir valores arbitr
 
 - El HUD se recompone; no se limita a encoger.
 - Movimiento en zona inferior izquierda; acciones en zona inferior derecha; objetivo/progreso en una banda superior compacta.
-- Controles táctiles mínimos de 52×52 px, separados al menos 8 px y respetando safe areas.
+- Controles táctiles con mínimo absoluto de 44×44 px; usar 52×52 px cuando el viewport lo permita. Separarlos al menos 8 px y respetar safe areas.
 - Chat y votación se apilan verticalmente. Nada esencial depende de hover.
-- Soportar 320×568, 390×844 y paisaje 844×390 sin clipping.
+- Soportar `390×844`, `360×640`, `640×390`, `568×320` y `360×300` sin clipping.
 
 ### Mundo
 
