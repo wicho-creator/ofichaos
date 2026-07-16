@@ -10,7 +10,7 @@ const config = {
   parent: 'game-container',
   width: window.innerWidth,
   height: window.innerHeight,
-  backgroundColor: '#1a1a2e',
+  backgroundColor: '#dbeafe',
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH

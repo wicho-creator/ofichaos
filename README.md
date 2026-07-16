@@ -1,194 +1,90 @@
-# 🎮 OfiChaos
-### El caos de la oficina — Juego multijugador online
+# OfiChaos
 
-> **🚀 Jugar ahora:** https://ofichaos.onrender.com
-> **📦 Código:** https://github.com/wicho-creator/ofichaos
+Party game web de deducción social para cuatro personas. Tres Empleados trabajan, reparan crisis y reúnen pistas mientras un Jefe secreto finge colaborar y sabotea una oficina caricaturesca.
 
-OfiChaos es un juego tipo *Among Us* ambientado en una oficina tóxica y cómica. Los jugadores reciben roles secretos (Empleado, Jefe, Lamebotas), completan tareas, sabotean, convocan reuniones y votan para ganar.
-
-**Documentación técnica completa:** ver `DOCS.md`
-
----
-
-## 🛠️ Stack
-
-| Capa | Tecnología |
-|------|-----------|
-| Frontend | **Phaser.js 3.80** (2D top-down) |
-| Backend | **Node.js + Express** |
-| Multiplayer | **Socket.IO** |
-
----
-
-## 📦 Instalación
+## Jugar localmente
 
 ```bash
-# 1. Clonar o descargar el proyecto
-cd ofichaos
-
-# 2. Instalar dependencias
 npm install
-
-# 3. Ejecutar el servidor
-npm run dev
-# o: PORT=3456 npm run dev (si el puerto 3000 está ocupado)
+npm start
 ```
 
-El servidor levanta por defecto en `http://localhost:3000`.
-Si el puerto está ocupado, usar `PORT=3456 npm run dev`.
+Abre `http://localhost:3000`. Para usar otro puerto:
 
----
-
-## ▶️ Cómo jugar localmente
-
-1. Abrir `http://localhost:3000` (o el puerto configurado) en el navegador.
-2. Escribir un nombre y hacer click en **Crear sala**.
-3. Compartir el código de sala (5 letras) con otros jugadores.
-4. Los demás abren la misma URL, escriben su nombre, ingresan el código y hacen click en **Unirse**.
-5. Cuando haya **mínimo 4 jugadores**, el host (creador de la sala) puede hacer click en **Iniciar partida**.
-6. Cada jugador recibe un **rol secreto** y un **objetivo secundario** en pantalla.
-7. Moverse con **WASD** o las **flechas**.
-8. Hacer click en una zona cercana para iniciar una tarea.
-9. El Jefe y Lamebotas pueden sabotear con el botón 💀. Las habilidades tienen cooldown para evitar spam.
-10. Los empleados pueden reportar sabotajes cercanos con 🚨; esto convoca reunión si el reporte es válido.
-11. Cualquier empleado puede convocar una reunión con el botón 📋 (una vez por partida).
-12. En la reunión: chatear (60 seg), luego votar (20 seg).
-13. El jugador más votado recibe una sanción.
-
----
-
-## 🗓️ Roles del MVP
-
-### Empleado 🟢
-- **Objetivo:** Completar tareas y descubrir al Jefe o Lamebotas.
-- **Habilidades:** Hacer tareas, reportar sabotaje, convocar reunión (1x por partida).
-
-### Jefe 🔴
-- **Objetivo:** Evitar que los empleados completen el 80% de tareas antes de que acabe el tiempo.
-- **Habilidades:** Sabotear zona, asignar tarea extra, bajar moral, cerrar puerta.
-
-### Lamebotas 🟡
-- **Objetivo:** Ayudar al Jefe sin ser descubierto.
-- **Habilidades:** Fingir tarea, crear reporte falso, bloquear tarea y sabotear zonas.
-
-### Cooldowns y reportes
-- Las habilidades muestran su cooldown en el HUD.
-- `fakeTask`, `falseReport` y `blockTask` ya tienen eventos reales de Socket.IO.
-- Un empleado puede reportar un sabotaje activo/cercano para abrir una reunión.
-
----
-
-## 🗺️ Mapa de la oficina
-
-El mapa incluye 8 zonas conectadas:
-
-| Zona | Tarea |
-|------|-------|
-| Recepción | Imprimir reporte |
-| Cubículos | Responder correos |
-| Sala de Juntas | — |
-| Cocina | Preparar café |
-| Archivo | Ordenar archivos |
-| Oficina del Jefe | — |
-| Recursos Humanos | — |
-| Servidor / IT | Arreglar WiFi |
-
----
-
-## 😊 Sistema de moral
-
-Cada jugador empieza con **100 de moral**.
-
-| Baja | Sube |
-|------|------|
-| Saboteado (-15) | Completar tarea (+5) |
-| Tarea extra (-10) | Recibir ayuda |
-| Fallar tarea | Sobrevivir reunión |
-| Acusado en reunión (-20) | |
-
-**Burnout:** Si la moral llega a 0, el jugador entra en burnout por 20 segundos (movimiento lento, sin tareas).
-
----
-
-## 🏆 Condiciones de victoria
-
-| Quién gana | Cuándo |
-|------------|--------|
-| **Empleados** | Completan 80% de tareas antes del tiempo |
-| **Jefe** | El tiempo acaba y tareas < 80% |
-| **Jefe** | 50% de empleados en burnout |
-| **Lamebotas** | El Jefe gana Y el lamebotas no fue sancionado 2 veces |
-
----
-
-## ⏱️ Duración
-
-- Partida: **8 minutos**
-- Reunión (discusión): **60 segundos**
-- Votación: **20 segundos**
-
----
-
-## 📁 Estructura del proyecto
-
-```
-ofichaos/
-├── server/
-│   ├── index.js          # Servidor Express + Socket.IO
-│   ├── roomManager.js    # Salas privadas con código
-│   ├── gameState.js      # Estado de partida, moral, victoria
-│   ├── roles.js          # Asignación de roles y objetivos
-│   ├── tasks.js          # Definición de tareas y zonas
-│   └── sabotage.js       # Lógica de sabotajes
-├── client/
-│   ├── index.html        # HTML base
-│   └── src/
-│       ├── main.js              # Config de Phaser
-│       ├── scenes/
-│       │   ├── LobbyScene.js    # Crear/unirse a sala, lobby
-│       │   ├── GameScene.js     # Mapa, movimiento, tareas, HUD
-│       │   ├── MeetingScene.js  # Chat y votación
-│       │   └── EndScene.js      # Pantalla final
-│       └── systems/
-│           ├── player.js        # Sprites de jugadores
-│           ├── tasks.js         # Definición de tareas (cliente)
-│           ├── ui.js            # Botones y paneles en Phaser
-│           └── networking.js    # Wrapper de Socket.IO
-├── package.json
-└── README.md
+```bash
+PORT=3456 npm start
 ```
 
----
+1. Una persona crea la sala y comparte el código de cinco caracteres.
+2. Otras tres personas se unen desde sus navegadores.
+3. El host inicia cuando hay al menos cuatro jugadores.
+4. Cada cliente recibe un briefing privado con su rol, misión y primer paso.
+5. Muévete con WASD/flechas o los controles táctiles. Acércate a una estación para trabajar o reparar.
+6. Observa sabotajes y cambios de moral; convoca una reunión para discutir y votar.
+7. Completa la cuota antes del cierre o permite que el caos y el burnout den la victoria al Jefe.
 
-## 📜 Pendientes para versión 2
+El botón **Probar sala demo** permite recorrer el mapa y probar la interfaz sin reunir cuatro clientes.
 
-- [ ] **Roles adicionales:** Pasante, Integrista, Dinosaurio.
-- [ ] **Minijuegos reales** en lugar de barras de progreso (con perplejidad real).
-- [x] **Sprites básicos mejorados** en lugar de círculos simples (personajes placeholder con rol visual).
-- [ ] **Colisiones** entre jugadores y mobiliario del mapa.
-- [x] **Cámara** que sigue al jugador + zoom.
-- [ ] **Registro/Login** con persistencia de perfil.
-- [ ] **Estadísticas y ranking** entre partidas.
-- [ ] **Persistencia de salas** para reconexión tras desconexión.
-- [ ] **Bots IA** para llenar salas con <4 jugadores.
-- [ ] **Mapas múltiples** (varias oficinas seleccionables).
-- [ ] **Sistema de skins** personalizables.
-- [ ] **Animaciones de sprites** (caminar, hacer tarea, sabotear).
-- [ ] **Efectos de sonido** y música de oficina.
-- [ ] **Notificaciones push** de sabotajes en pantalla.
-- [x] **Cooldown indicator visual** en botones de habilidad.
-- [x] **Verificación de objetivo secundario** al final/payload de estado.
-- [ ] **Sistema de puntos completo** (actualmente simplificado en MVP).
-- [ ] **Tests automatizados** de lógica de juego (jest).
-- [ ] **Deploy en producción** (glitch/Render/Fly.io con Redis para salas).
-- [ ] **PWA mobile-first** para jugar desde celular.
-- [ ] **Spectator mode** para jugadores sancionados/suspendidos.
-- [ ] **Tareas cooperativas** (2+ jugadores necesarias).
-- [ ] **Eventos aleatorios** (corte de luz, fiesta sorpresa, inspector).
+## Integridad de la deducción
 
----
+- Los snapshots compartidos nunca contienen roles, objetivos privados ni cooldowns ajenos.
+- `game:role` entrega el briefing solo al socket propietario.
+- `game:private` entrega únicamente los cooldowns del jugador local.
+- Apariencia, color, chat y tarjetas de reunión son neutrales respecto del rol.
+- Los roles se revelan únicamente en la pantalla final.
 
-## 📄 Licencia
+## Dirección visual
 
-MIT — Hecho con 💜 para divertirse con amigos.
+Oficina 2D luminosa, caótica y legible: azul eléctrico para identidad, coral para crisis, amarillo para tareas y verde para progreso. El sabotaje altera el borde y el mundo sin ocultar el mapa. Los layouts se recomponen para escritorio y móvil; no son un dashboard reducido.
 
+Los contratos completos viven en:
+
+- [`PRODUCT.md`](PRODUCT.md): propósito, usuarios y principios.
+- [`DESIGN.md`](DESIGN.md): tokens, layouts, componentes y reglas visuales.
+
+## Arquitectura
+
+| Capa | Tecnología |
+|---|---|
+| Cliente | Phaser 3 + DOM accesible para formularios/chat |
+| Servidor | Node.js + Express |
+| Multiplayer | Socket.IO |
+| Persistencia | En memoria; una instancia de servidor |
+
+Piezas principales:
+
+```text
+client/src/scenes/       Lobby, juego, reunión y final
+client/src/systems/      red, jugadores, UI, onboarding, tema y mundo
+server/index.js          transporte y validación Socket.IO
+server/projections.js    estado público, privado y final
+server/roomManager.js    salas y acciones autoritativas
+server/gameState.js      fases, votación, moral y victoria
+tests/                   E2E, lifecycle, layouts, mundo y victoria
+```
+
+`world.js` es la fuente cliente única de límites, zonas, obstáculos y búsqueda de estaciones. El servidor conserva la autoridad sobre movimiento, tareas, sabotajes, reuniones, votos y victoria.
+
+## Verificación
+
+```bash
+npm test
+```
+
+También pueden ejecutarse por separado:
+
+```bash
+node --test tests/e2e.test.js
+node --test tests/victory_verification.test.js
+node --test tests/client-lifecycle.test.mjs tests/onboarding.test.mjs tests/theme-contract.test.mjs tests/world-layout.test.mjs
+```
+
+La revisión responsive cubre escritorio, `390×844` y `360×640`. El gate de integración abre cuatro contextos aislados de Chrome y verifica crear/unirse/iniciar, privacidad de roles, reunión, chat, cuatro votos, reanudación y final sin errores de consola.
+
+## Alcance actual
+
+Incluye una oficina, cuatro jugadores, tareas, sabotajes, moral/burnout, reunión, votación, sanciones, condiciones de victoria y revancha. No incluye cuentas, ranking, skins, múltiples mapas, reconexión persistente ni escalado horizontal de salas.
+
+## Licencia
+
+MIT

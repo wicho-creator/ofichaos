@@ -270,15 +270,8 @@ function startVoting(room) {
  */
 function castVote(room, voterId, targetId) {
   const gs = room.gameState;
-  console.log(`[DEBUG castVote] phase: ${gs.phase}, voter: ${voterId}, target: ${targetId}, room players:`, Object.keys(room.players || {}));
-  if (gs.phase !== 'voting') {
-    console.log(`[DEBUG castVote] Failed because phase is not voting (phase is ${gs.phase})`);
-    return false;
-  }
-  if (targetId !== 'skip' && (!room.players || !room.players[targetId])) {
-    console.log(`[DEBUG castVote] Failed because target is not skip and not a valid player`);
-    return false;
-  }
+  if (gs.phase !== 'voting') return false;
+  if (targetId !== 'skip' && (!room.players || !room.players[targetId])) return false;
   gs.votes[voterId] = targetId;
   return true;
 }

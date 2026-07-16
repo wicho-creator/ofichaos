@@ -1,13 +1,14 @@
 {
   "name": "ofichaos",
   "version": "1.0.0",
-  "description": "OfiChaos - Juego multijugador online tipo Among Us ambientado en una oficina toxica y comica",
+  "description": "Party game web de deducción social ambientado en una oficina caótica",
   "main": "server/index.js",
   "scripts": {
     "dev": "node server/index.js",
     "start": "node server/index.js",
-    "build": "echo 'No build step needed for MVP - client served statically'",
-    "test": "echo 'No tests in MVP - pending for v2'"
+    "test": "node --test tests/e2e.test.js && node --test tests/victory_verification.test.js && node --test tests/client-lifecycle.test.mjs tests/onboarding.test.mjs tests/theme-contract.test.mjs tests/world-layout.test.mjs",
+    "test:victory": "node --test tests/victory_verification.test.js",
+    "check": "node --check server/*.js && node --check client/src/main.js && node --check client/src/scenes/*.js && node --check client/src/systems/*.js"
   },
   "dependencies": {
     "express": "^4.19.2",

@@ -7,8 +7,8 @@ const { Server } = require('socket.io');
 
 const roomManager = require('./roomManager');
 const sabotage = require('./sabotage');
-const { ZONES } = require('./tasks');
 const { updateSecondaryObjectives } = require('./gameState');
+const { projectPublic, projectPrivate, projectRuntimePrivate, projectTick, projectFinal } = require('./projections');
 
 const app = express();
 const server = http.createServer(app);
@@ -96,15 +96,9 @@ io.on('connection', (socket) => {
     }
 
     // Enviar a cada jugador su rol secreto
-    const gs = room.gameState;
     for (const pid of Object.keys(room.players)) {
       const p = room.players[pid];
-      const assignment = gs.roleAssignments[pid];
-      io.to(pid).emit('game:role', {
-        role: p.role,
-        secondaryObjectiveText: p.secondaryObjectiveText,
-        playerId: pid
-      });
+      io.to(pid).emit('game:role', projectPrivate(p));
     }
 
     // En estado de juego inicial a todos
@@ -149,15 +143,12 @@ io.on('connection', (socket) => {
     if (!p || (p.role !== 'jefe' && p.role !== 'lamebotas')) return;
 
     if (!canUseAbility(socket, room, playerId, 'zone')) return;
-    const cooldownUntil = markAbilityUsed(room, playerId, 'zone');
-    const affected = sabotage.sabotageZone(room, zoneId, playerId);
+    markAbilityUsed(room, playerId, 'zone');
+    sabotage.sabotageZone(room, zoneId, playerId);
     io.to(currentRoom).emit('sabotage:triggered', {
       type: 'zone',
       zoneId,
-      saboteurId: playerId,
-      affected,
-      expires: Date.now() + 20000,
-      cooldownUntil
+      expires: Date.now() + 20000
     });
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
     console.log(`[SABOTAGE] ${p.name} saboteó zona ${zoneId}`);
@@ -173,7 +164,7 @@ io.on('connection', (socket) => {
     if (!canUseAbility(socket, room, playerId, 'extra_task')) return;
     markAbilityUsed(room, playerId, 'extra_task');
     sabotage.assignExtraTask(room, targetId, playerId);
-    io.to(targetId).emit('sabotage:extra_task', { from: playerId });
+    io.to(targetId).emit('sabotage:extra_task', {});
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
 
@@ -187,7 +178,7 @@ io.on('connection', (socket) => {
     if (!canUseAbility(socket, room, playerId, 'lower_morale')) return;
     markAbilityUsed(room, playerId, 'lower_morale');
     sabotage.lowerMorale(room, targetId, playerId);
-    io.to(targetId).emit('sabotage:morale', { from: playerId });
+    io.to(targetId).emit('sabotage:morale', {});
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
 
@@ -220,7 +211,7 @@ io.on('connection', (socket) => {
     const result = sabotage.fakeTask(room, playerId);
     updateSecondaryObjectives(room);
     socket.emit('sabotage:fake_task', result);
-    io.to(currentRoom).emit('sabotage:triggered', { type: 'fake_task', saboteurId: undefined });
+    io.to(currentRoom).emit('sabotage:triggered', { type: 'fake_task' });
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
 
@@ -232,9 +223,9 @@ io.on('connection', (socket) => {
     if (!p || p.role !== 'lamebotas') return;
     if (!canUseAbility(socket, room, playerId, 'false_report')) return;
     markAbilityUsed(room, playerId, 'false_report');
-    const result = sabotage.falseReport(room, playerId);
+    sabotage.falseReport(room, playerId);
     updateSecondaryObjectives(room);
-    io.to(currentRoom).emit('sabotage:false_report', { from: playerId, affected: result?.affected || [] });
+    io.to(currentRoom).emit('sabotage:false_report', {});
     io.to(currentRoom).emit('game:update', getGamePayload(currentRoom));
   });
 
@@ -363,11 +354,10 @@ setInterval(() => {
 
     // Broadcast periódico del estado de juego
     if (room.gameState && room.gameState.phase === 'playing') {
-      io.to(code).emit('game:tick', {
-        timeRemaining: room.gameState.timeRemaining,
-        taskPercent: getTaskPercent(code),
-        players: getPlayerPositions(code)
-      });
+      io.to(code).emit('game:tick', projectTick(room));
+      for (const player of Object.values(room.players)) {
+        io.to(player.id).emit('game:private', projectRuntimePrivate(player));
+      }
     }
   }
 }, 1000);
@@ -415,60 +405,12 @@ function getRoomPayload(code) {
 
 function getGamePayload(code) {
   const room = roomManager.getRoom(code);
-  if (!room || !room.gameState) return null;
-  const gs = room.gameState;
-  return {
-    phase: gs.phase,
-    timeRemaining: gs.timeRemaining,
-    taskPercent: getTaskPercent(code),
-    tasks: gs.taskStates.map((t) => ({
-      id: t.id,
-      name: t.name,
-      zone: t.zone,
-      completed: t.completed,
-      blockedUntil: t.blockedUntil || 0,
-      blocked: !!(t.blockedUntil && t.blockedUntil > Date.now())
-    })),
-    zones: ZONES,
-    players: Object.values(room.players).map((p) => ({
-      id: p.id,
-      name: p.name,
-      x: p.x,
-      y: p.y,
-      morale: p.morale,
-      role: p.role, // se filtra en cliente según corresponda
-      tasksCompleted: p.tasksCompleted || 0,
-      burnout: gs.burnedOutPlayers.has(p.id),
-      secondaryObjectiveDone: !!p.secondaryObjectiveDone,
-      cooldowns: sabotage.getCooldownPayload(p)
-    })),
-    meetingTimer: gs.meetingTimer,
-    votingTimer: gs.votingTimer,
-    activeSabotages: gs.activeSabotages.map((s) => ({ ...s, saboteurId: undefined })),
-    secondaryObjectiveStatus: gs.secondaryObjectiveStatus
-  };
+  return projectPublic(room);
 }
 
 function getEndPayload(code, result) {
   const room = roomManager.getRoom(code);
-  if (!room) return null;
-  const gs = room.gameState;
-  return {
-    winners: result.winners,
-    reason: result.reason,
-    lamebotasWinners: result.lamebotasWinners || [],
-    players: Object.values(room.players).map((p) => ({
-      id: p.id,
-      name: p.name,
-      role: p.role,
-      points: gs.points[p.id] || 0,
-      tasksCompleted: p.tasksCompleted || 0,
-      sanctions: p.sanctions || 0,
-      secondaryObjectiveText: p.secondaryObjectiveText || '',
-      secondaryObjectiveDone: !!p.secondaryObjectiveDone,
-      cooldowns: sabotage.getCooldownPayload(p)
-    }))
-  };
+  return projectFinal(room, result);
 }
 
 function getTaskPercent(code) {
@@ -477,16 +419,6 @@ function getTaskPercent(code) {
   const tasks = room.gameState.taskStates;
   if (tasks.length === 0) return 0;
   return Math.round((tasks.filter((t) => t.completed).length / tasks.length) * 100);
-}
-
-function getPlayerPositions(code) {
-  const room = roomManager.getRoom(code);
-  if (!room) return {};
-  const positions = {};
-  for (const p of Object.values(room.players)) {
-    positions[p.id] = { x: p.x, y: p.y, morale: p.morale, cooldowns: sabotage.getCooldownPayload(p) };
-  }
-  return positions;
 }
 
 server.listen(PORT, () => {

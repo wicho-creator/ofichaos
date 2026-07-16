@@ -1,7 +1,12 @@
-// LobbyScene.js — Pantalla de lobby: crear/unirse a sala, elegir nombre, lista de jugadores
-
+// LobbyScene.js — Entrada accesible, sala multijugador y demo de OfiChaos.
 import * as net from '../systems/networking.js';
-import { createButton, createPanel, createText } from '../systems/ui.js';
+import { createButton } from '../systems/ui.js';
+import {
+  COLORS, CSS_COLORS, FONT, MIN_PLAYERS, RADIUS,
+  drawOfficeBackdrop, drawPanel, lobbyLayout, textStyle
+} from '../systems/theme.js';
+
+const safeName = value => value.trim().slice(0, 12) || 'Jugador';
 
 export class LobbyScene extends Phaser.Scene {
   constructor() {
@@ -11,128 +16,155 @@ export class LobbyScene extends Phaser.Scene {
     this.myRole = null;
     this.myId = null;
     this.roleAssigned = false;
+    this.networkDisposers = [];
   }
 
   create() {
     document.getElementById('loading')?.classList.add('hidden');
-    this.cameras.main.setBackgroundColor('#1a1a2e');
+    const { width, height } = this.scale;
+    this.layout = lobbyLayout(width, height);
+    this.cameras.main.setBackgroundColor(CSS_COLORS.background);
+    drawOfficeBackdrop(this, width, height);
+    this.drawBrand();
+    drawPanel(this, this.layout.card);
+    this.drawHeading();
+    this.createEntryForm();
+    this.drawRoomArea();
 
-    createPanel(this, this.scale.width / 2, this.scale.height / 2, 560, 540, 0x16213e);
-    createText(this, this.scale.width / 2, 60, 'OFICHAOS', { fontSize: '48px', color: '#fbbf24', bold: true }).setOrigin(0.5);
-    createText(this, this.scale.width / 2, 100, 'El caos de la oficina', { fontSize: '18px', color: '#94a3b8' }).setOrigin(0.5);
-
-    // Input de nombre
-    this.add.text(this.scale.width / 2 - 180, 120, 'Nombre:', { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0, 0.5);
-    const nameInput = this.add.dom(this.scale.width / 2, 140).createFromHTML('<input id="name-field" type="text" maxlength="12" placeholder="Ej: Carlos" style="width:240px;padding:8px;font-size:16px;background:#334155;color:#e0e0e0;border:2px solid #6366f1;border-radius:6px;">');
-    nameInput.setOrigin(0.5);
-    const nameEl = document.getElementById('name-field');
-
-    // Input de código
-    this.add.text(this.scale.width / 2 - 180, 200, 'Código:', { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0, 0.5);
-    const codeInput = this.add.dom(this.scale.width / 2, 220).createFromHTML('<input id="code-field" type="text" maxlength="5" placeholder="ABCDE" style="width:240px;padding:8px;font-size:16px;background:#334155;color:#e0e0e0;border:2px solid #6366f1;border-radius:6px;text-transform:uppercase;">');
-    codeInput.setOrigin(0.5);
-    const codeEl = document.getElementById('code-field');
-
-    // Botones
-    const btnY = 260;
-    createButton(this, this.scale.width / 2 - 110, btnY, 'Crear sala', () => {
-      const name = nameEl.value || 'Jugador';
-      this.roomCode = null;
-      this.myRole = null;
-      this.roleAssigned = false;
-      net.createRoom(name);
-    });
-    createButton(this, this.scale.width / 2 + 110, btnY, 'Unirse', () => {
-      const name = nameEl.value || 'Jugador';
-      const code = codeEl.value.toUpperCase();
-      if (!code) { this.showMessage('Ingresa un código'); return; }
-      this.roomCode = null;
-      this.myRole = null;
-      this.roleAssigned = false;
-      net.joinRoom(code, name);
-    });
-
-    createButton(this, this.scale.width / 2, btnY + 60, '🧪 Probar sala demo', () => {
-      this.startDemoRoom(nameEl.value || 'Wicho');
-    }, { width: 300, height: 46, bgColor: 0xf59e0b, bgHover: 0xfbbf24, textColor: '#111827', fontSize: '16px' });
-
-    // Área de info de sala
-    this.infoText = createText(this, this.scale.width / 2, btnY + 120, 'Aún no estás en una sala.', { fontSize: '14px', color: '#94a3b8' }).setOrigin(0.5);
-    this.playersText = createText(this, this.scale.width / 2, btnY + 180, '', { fontSize: '16px', color: '#e0e0e0' }).setOrigin(0.5);
-    this.startButton = null;
-
-    // Listeners de socket
     this.setupSocketListeners();
+    this.events.once('shutdown', () => net.disposeAll(this.networkDisposers));
+  }
+
+  drawBrand() {
+    const { centerX, brandY, mobile } = this.layout;
+    const size = mobile ? 34 : 46;
+    const logo = this.add.text(centerX, brandY, 'OFI', {
+      fontFamily: FONT.display, fontSize: `${size}px`, color: CSS_COLORS.primary,
+      fontStyle: 'bold', stroke: CSS_COLORS.border, strokeThickness: mobile ? 3 : 4
+    }).setOrigin(1, 0).setAngle(-2);
+    this.add.text(centerX, brandY + 1, 'CHAOS', {
+      fontFamily: FONT.display, fontSize: `${size}px`, color: CSS_COLORS.task,
+      fontStyle: 'bold', stroke: CSS_COLORS.border, strokeThickness: mobile ? 3 : 4
+    }).setOrigin(0, 0).setAngle(2);
+    this.add.graphics().fillStyle(COLORS.sabotage).fillCircle(centerX + logo.width * 0.77, brandY + 4, mobile ? 5 : 7);
+  }
+
+  drawHeading() {
+    const top = this.layout.card.y - this.layout.card.height / 2;
+    this.add.text(this.layout.centerX, top + 18, 'La oficina está por explotar', {
+      fontFamily: FONT.display, fontSize: `${this.layout.short ? 20 : 24}px`, color: CSS_COLORS.ink,
+      fontStyle: 'bold', align: 'center',
+      wordWrap: { width: this.layout.card.width - 40 }
+    }).setOrigin(0.5, 0);
+    if (!this.layout.short) {
+      this.add.text(this.layout.centerX, top + 50, 'Crea una sala o entra con el código de tu equipo.', {
+        ...textStyle(14, CSS_COLORS.muted, false, 'center'),
+        wordWrap: { width: this.layout.card.width - 40 }
+      }).setOrigin(0.5, 0);
+    }
+  }
+
+  createEntryForm() {
+    const width = Math.min(this.layout.card.width - 32, 520);
+    const compact = this.layout.mobile;
+    const html = `
+      <form class="ofc-entry" aria-label="Entrar a una sala de OfiChaos" autocomplete="off">
+        <div class="ofc-fields">
+          <label>Tu nombre<input name="name" type="text" maxlength="12" placeholder="Ej. Ana" autocomplete="nickname" aria-describedby="name-help"></label>
+          <span id="name-help" class="sr-only">Máximo 12 caracteres</span>
+          <label>Código de sala<input name="code" type="text" maxlength="5" placeholder="ABCDE" inputmode="text" autocapitalize="characters" aria-label="Código de sala de cinco caracteres"></label>
+        </div>
+        <div class="ofc-actions">
+          <button type="button" data-action="create">Crear sala</button>
+          <button type="submit" data-action="join">Unirme</button>
+        </div>
+        <button class="ofc-demo" type="button" data-action="demo"><span aria-hidden="true" class="ofc-flask"></span>Probar sala demo</button>
+      </form>`;
+    this.entryDom = this.add.dom(this.layout.centerX, this.layout.formY).createFromHTML(html).setOrigin(0.5, 0);
+    const form = this.entryDom.node.querySelector('form');
+    form.style.width = `${width}px`;
+    this.entryDom.updateSize();
+    this.entryDom.setOrigin(0.5, 0);
+    form.classList.toggle('is-compact', compact);
+    const name = form.elements.name;
+    const code = form.elements.code;
+    const resetJoin = () => { this.roomCode = null; this.myRole = null; this.roleAssigned = false; };
+
+    form.querySelector('[data-action="create"]').addEventListener('click', () => {
+      resetJoin();
+      net.createRoom(safeName(name.value));
+    });
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const roomCode = code.value.trim().toUpperCase();
+      if (!roomCode) { this.showMessage('Escribe el código de la sala.'); code.focus(); return; }
+      resetJoin();
+      net.joinRoom(roomCode, safeName(name.value));
+    });
+    form.querySelector('[data-action="demo"]').addEventListener('click', () => this.startDemoRoom(safeName(name.value) || 'Wicho'));
+    code.addEventListener('input', () => { code.value = code.value.replace(/[^a-z0-9]/gi, '').toUpperCase(); });
+  }
+
+  drawRoomArea() {
+    const x = this.layout.centerX;
+    this.infoText = this.add.text(x, this.layout.infoY, 'Aún no estás en una sala.', textStyle(14, CSS_COLORS.muted, true, 'center')).setOrigin(0.5, 0);
+    this.playersText = this.add.text(x, this.layout.listY, '', {
+      ...textStyle(this.layout.short ? 14 : 16, CSS_COLORS.ink, false, 'left'),
+      lineSpacing: this.layout.short ? 4 : 7,
+      wordWrap: { width: this.layout.card.width - 48 }
+    }).setOrigin(0.5, 0);
+    this.startButton = null;
   }
 
   setupSocketListeners() {
-    net.socket.on('room:created', ({ code, playerId }) => {
-      this.myId = playerId;
-      this.roomCode = code;
-      this.showMessage(`Sala creada: ${code}`);
-    });
-
-    net.socket.on('room:joined', ({ code, playerId }) => {
-      this.myId = playerId;
-      this.roomCode = code;
-      this.showMessage(`Te uniste a sala ${code}`);
-    });
-
-    net.socket.on('room:update', (payload) => {
-      if (!payload) return;
-      this.roomState = payload;
-      this.updateLobbyUI();
-    });
-
-    net.socket.on('error:message', ({ message }) => {
-      this.showMessage(`Error: ${message}`);
-    });
-
-    net.socket.on('game:role', ({ role, secondaryObjectiveText }) => {
-      this.myRole = role;
-      this.roleAssigned = true;
-      this.roleText = secondaryObjectiveText;
-    });
-
-    net.socket.on('game:started', (gameState) => {
+    net.disposeAll(this.networkDisposers);
+    const on = (event, handler) => this.networkDisposers.push(net.subscribe(event, handler));
+    on('room:created', ({ code, playerId }) => { this.myId = playerId; this.roomCode = code; this.showMessage(`Sala ${code} creada · comparte el código`); });
+    on('room:joined', ({ code, playerId }) => { this.myId = playerId; this.roomCode = code; this.showMessage(`Ya estás en la sala ${code}`); });
+    on('room:update', payload => { if (payload) { this.roomState = payload; this.updateLobbyUI(); } });
+    on('error:message', ({ message }) => this.showMessage(`No se pudo entrar: ${message}`));
+    on('game:role', ({ role, secondaryObjectiveText }) => { this.myRole = role; this.roleAssigned = true; this.roleText = secondaryObjectiveText; });
+    on('game:started', gameState => {
       if (!this.roleAssigned) {
         this.scene.get('GameScene').myRole = this.myRole;
         this.scene.get('GameScene').roleText = this.roleText;
       }
       this.scene.stop('LobbyScene');
-      this.scene.start('GameScene', { roomCode: this.roomCode, myId: this.myId, myRole: this.myRole, roleText: this.roleText });
+      this.scene.start('GameScene', { roomCode: this.roomCode, myId: this.myId, myRole: this.myRole, roleText: this.roleText, gameState });
     });
   }
 
   updateLobbyUI() {
-    if (!this.roomState || !this.roomState.players) return;
+    if (!this.roomState?.players) return;
     const players = this.roomState.players;
     const count = players.length;
-    const names = players.map(p => p.name).join('\n');
-    this.playersText.setText(`Jugadores (${count}/12):\n${names}`);
+    const visible = players.slice(0, this.layout.maxRows);
+    const rows = visible.map((player, index) => `${index + 1}.  ${player.name}${player.id === this.myId ? '  · Tú' : ''}`);
+    if (visible.length < count) rows.push(`+ ${count - visible.length} más`);
+    this.playersText.setText(`EQUIPO  ${count}/12\n${rows.join('\n')}`);
 
-    // Mostrar botón de iniciar si es host y hay >= 4 jugadores
-    if (this.roomState.hostId === this.myId && count >= 4 && !this.startButton) {
-      this.startButton = createButton(this, this.scale.width / 2, this.scale.height - 100, '🚀 Iniciar partida', () => {
-        net.startGame();
-      }, { bgColor: 0x16a34a, bgHover: 0x22c55e, fontSize: '20px', width: 300, height: 60 });
+    const missing = Math.max(0, MIN_PLAYERS - count);
+    this.showMessage(missing ? `Faltan ${missing} ${missing === 1 ? 'persona' : 'personas'} para empezar (mínimo ${MIN_PLAYERS}).` : 'Equipo completo. El host puede iniciar.');
+    const isHost = this.roomState.hostId === this.myId;
+    if (isHost && count >= MIN_PLAYERS && !this.startButton) {
+      const y = this.layout.card.y + this.layout.card.height / 2 - 38;
+      this.startButton = createButton(this, this.layout.centerX, y, 'Iniciar partida', () => net.startGame(), {
+        bgColor: COLORS.primary, bgHover: COLORS.ink, textColor: '#ffffff', fontSize: '17px',
+        width: Math.min(300, this.layout.card.width - 48), height: 52, radius: RADIUS.md
+      });
     }
-    if (count < 4 && this.startButton) {
+    if ((!isHost || count < MIN_PLAYERS) && this.startButton) {
       this.startButton.bg.destroy();
       this.startButton.label.destroy();
       this.startButton = null;
     }
   }
 
-  showMessage(msg) {
-    if (this.infoText) this.infoText.setText(msg);
-  }
+  showMessage(message) { this.infoText?.setText(message); }
 
   startDemoRoom(name = 'Wicho') {
     const demoState = {
-      phase: 'playing',
-      timeRemaining: 7 * 60 * 1000 + 35 * 1000,
-      taskPercent: 20,
+      phase: 'playing', timeRemaining: 455000, taskPercent: 20,
       tasks: [
         { id: 'reporte', name: 'Imprimir reporte', zone: 'recepcion', completed: false },
         { id: 'correos', name: 'Responder correos', zone: 'cubiculos', completed: true },
@@ -143,18 +175,12 @@ export class LobbyScene extends Phaser.Scene {
       players: [
         { id: 'demo-me', name, x: 220, y: 190, morale: 86, role: 'empleado', tasksCompleted: 1, burnout: false, secondaryObjectiveDone: false, cooldowns: { report_sabotage: 16000 } },
         { id: 'demo-jefe', name: 'La Jefa', x: 800, y: 470, morale: 100, role: 'jefe', tasksCompleted: 0, burnout: false, cooldowns: {} },
-        { id: 'demo-lame', name: 'Lame Pro', x: 520, y: 455, morale: 95, role: 'lamebotas', tasksCompleted: 0, burnout: false, cooldowns: {} },
-        { id: 'demo-ana', name: 'Ana', x: 560, y: 205, morale: 72, role: 'empleado', tasksCompleted: 1, burnout: false, cooldowns: {} }
+        { id: 'demo-ana', name: 'Ana', x: 560, y: 205, morale: 72, role: 'empleado', tasksCompleted: 1, burnout: false, cooldowns: {} },
+        { id: 'demo-luis', name: 'Luis', x: 520, y: 455, morale: 95, role: 'empleado', tasksCompleted: 0, burnout: false, cooldowns: {} }
       ],
       activeSabotages: [{ type: 'block_task', taskId: 'archivos', expires: Date.now() + 12000 }]
     };
     this.scene.stop('LobbyScene');
-    this.scene.start('GameScene', {
-      roomCode: 'DEMO',
-      myId: 'demo-me',
-      myRole: 'empleado',
-      roleText: 'Reportar un sabotaje sin quemarte',
-      demoState
-    });
+    this.scene.start('GameScene', { roomCode: 'DEMO', myId: 'demo-me', myRole: 'empleado', roleText: 'Reportar un sabotaje sin quemarte', demoState });
   }
 }

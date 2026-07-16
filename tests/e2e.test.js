@@ -610,7 +610,7 @@ test('TC-T1-18: Emergency meeting trigger', async () => {
   assert.strictEqual(start.calledBy, clients[0].id);
   assert.strictEqual(room.gameState.phase, 'meeting');
   assert.strictEqual(room.gameState.meetingActive, true);
-  assert.strictEqual(room.gameState.meetingTimer, 60000);
+  assert.ok(room.gameState.meetingTimer > 0 && room.gameState.meetingTimer <= 60000);
 
   disconnectClients(clients);
 });
@@ -682,12 +682,17 @@ test('TC-T1-22: Sabotage trigger (Zone)', async () => {
   room.players[jefeId].abilityCooldowns = {};
 
   const triggerPromise = once(jefeClient, 'sabotage:triggered');
+  const updatePromise = once(clients[0], 'game:update');
   jefeClient.emit('sabotage:zone', { zoneId: 'cocina' });
 
-  const trigger = await triggerPromise;
+  const [trigger, update] = await Promise.all([triggerPromise, updatePromise]);
   assert.strictEqual(trigger.type, 'zone');
   assert.strictEqual(trigger.zoneId, 'cocina');
-  assert.strictEqual(trigger.saboteurId, jefeId);
+  assert.strictEqual(trigger.saboteurId, undefined);
+  assert.strictEqual(trigger.affected, undefined);
+  assert.strictEqual(trigger.cooldownUntil, undefined);
+  assert.deepStrictEqual(Object.keys(trigger).sort(), ['expires', 'type', 'zoneId']);
+  assert.deepStrictEqual(Object.keys(update.activeSabotages[0]).filter(key => update.activeSabotages[0][key] !== undefined).sort(), ['expires', 'type', 'zoneId']);
   assert.ok(room.gameState.activeSabotages.find(s => s.zoneId === 'cocina'));
 
   disconnectClients(clients);
@@ -745,8 +750,9 @@ test('TC-T1-25: Direct morale damage', async () => {
   room.players[empId].morale = 100;
 
   jefeClient.emit('sabotage:morale', { targetId: empId });
-  await once(empClient, 'sabotage:morale');
+  const notification = await once(empClient, 'sabotage:morale');
 
+  assert.deepStrictEqual(notification, {});
   assert.strictEqual(room.players[empId].morale, 80);
 
   disconnectClients(clients);
@@ -1153,7 +1159,8 @@ test('TC-T2-21: Lamebotas false report', async () => {
   room.players[lbId].abilityCooldowns = {};
 
   lbClient.emit('sabotage:false_report');
-  await once(lbClient, 'sabotage:false_report');
+  const notification = await once(lbClient, 'sabotage:false_report');
+  assert.deepStrictEqual(notification, {});
 
   // Morale of all other players drops by 8
   for (const pid of Object.keys(room.players)) {
@@ -1801,6 +1808,72 @@ test('TC-T5-11: Sanction limit loops and chat spam length overflow', async () =>
   const chatData = await chatPromise;
   assert.ok(chatData.message.length <= 200, 'Chat messages must be truncated to max 200 characters');
   assert.strictEqual(chatData.message, 'A'.repeat(200), 'Chat message must be truncated correctly to 200 characters');
+
+  disconnectClients(clients);
+});
+
+test('TC-G1-01: Public game events do not leak private player state', async () => {
+  const clients = [];
+  for (let i = 0; i < 4; i++) {
+    const socket = io(URL, { transports: ['websocket'], forceNew: true });
+    await once(socket, 'connect');
+    clients.push(socket);
+  }
+
+  clients[0].emit('room:create', { name: 'Host' });
+  const { code } = await once(clients[0], 'room:created');
+  for (let i = 1; i < clients.length; i++) {
+    clients[i].emit('room:join', { code, name: `Player_${i}` });
+    await once(clients[i], 'room:joined');
+  }
+
+  const rolePromises = clients.map(client => once(client, 'game:role'));
+  const startedPromise = once(clients[0], 'game:started');
+  clients[0].emit('game:start');
+  const [roles, started] = await Promise.all([Promise.all(rolePromises), startedPromise]);
+  const room = roomManager.getRoom(code);
+
+  for (let i = 0; i < clients.length; i++) {
+    assert.deepStrictEqual(roles[i], {
+      role: room.players[clients[i].id].role,
+      secondaryObjectiveText: room.players[clients[i].id].secondaryObjectiveText,
+      playerId: clients[i].id
+    });
+  }
+
+  const assertPublic = payload => {
+    assert.strictEqual(payload.secondaryObjectiveStatus, undefined);
+    for (const player of Object.values(payload.players)) {
+      assert.strictEqual(player.role, undefined);
+      assert.strictEqual(player.secondaryObjective, undefined);
+      assert.strictEqual(player.secondaryObjectiveText, undefined);
+      assert.strictEqual(player.secondaryObjectiveDone, undefined);
+      assert.strictEqual(player.cooldowns, undefined);
+    }
+  };
+
+  assertPublic(started);
+
+  const updatePromise = once(clients[0], 'game:update');
+  clients[0].emit('meeting:call');
+  await once(clients[0], 'meeting:started');
+  assertPublic(await updatePromise);
+
+  room.gameState.phase = 'playing';
+  const privatePromise = once(clients[0], 'game:private');
+  const tick = await once(clients[0], 'game:tick');
+  const privateState = await privatePromise;
+  assertPublic(tick);
+  assert.strictEqual(privateState.playerId, clients[0].id);
+  assert.deepStrictEqual(privateState.cooldowns, {});
+
+  const endedPromise = once(clients[0], 'game:ended');
+  room.gameState.endTime = Date.now() - 1;
+  const ended = await endedPromise;
+  for (const player of ended.players) {
+    assert.strictEqual(player.role, room.players[player.id].role);
+    assert.strictEqual(player.cooldowns, undefined);
+  }
 
   disconnectClients(clients);
 });

@@ -3,8 +3,8 @@
 export function createButton(scene, x, y, text, callback, style = {}) {
   let width = style.width || 200;
   let height = style.height || 50;
-  const bgColor = style.bgColor || 0x4c1d95;
-  const bgHover = style.bgHover || 0x6d28d9;
+  const bgColor = style.bgColor || 0x2563eb;
+  const bgHover = style.bgHover || 0x172554;
   const textColor = style.textColor || '#ffffff';
   const fontSize = style.fontSize || '18px';
   const radius = style.radius || 16;
@@ -21,7 +21,7 @@ export function createButton(scene, x, y, text, callback, style = {}) {
 
   const drawShadow = (w, h) => {
     shadow.clear();
-    shadow.fillStyle(0x000000, 0.28);
+    shadow.fillStyle(0x172554, 0.28);
     shadow.fillRoundedRect(-w / 2 + 4, -h / 2 + 6, w, h, radius);
   };
 
@@ -29,9 +29,9 @@ export function createButton(scene, x, y, text, callback, style = {}) {
     bg.clear();
     bg.fillStyle(color, 1);
     bg.fillRoundedRect(-w / 2, -h / 2 - lift, w, h, radius);
-    bg.lineStyle(3, 0xffffff, 0.72);
+    bg.lineStyle(3, 0xffffff, 0.82);
     bg.strokeRoundedRect(-w / 2, -h / 2 - lift, w, h, radius);
-    bg.lineStyle(2, 0x000000, 0.22);
+    bg.lineStyle(2, 0x15203a, 0.72);
     bg.strokeRoundedRect(-w / 2 + 4, -h / 2 + 4 - lift, w - 8, h - 8, Math.max(8, radius - 4));
   };
 

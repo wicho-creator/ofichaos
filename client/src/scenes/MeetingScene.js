@@ -1,438 +1,206 @@
-// proposed_MeetingScene.js — Escena de reunión pulida: chat de discusión + votación
 import * as net from '../systems/networking.js';
-import { createButton, createPanel, createText } from '../systems/ui.js';
+import { createButton, createPanel } from '../systems/ui.js';
+import { COLORS, CSS_COLORS, FONT, drawOfficeBackdrop, meetingLayout, textStyle } from '../systems/theme.js';
 
 export class MeetingScene extends Phaser.Scene {
   constructor() {
     super({ key: 'MeetingScene' });
-    this.chatMessages = [];
-    this.votes = {};
-    this.myId = null;
-    this.myRole = null;
-    
-    // UI elements to destroy on shutdown
-    this.chatBoxDOM = null;
-    this.chatInputDOM = null;
-    
-    // State
-    this.phase = 'meeting'; // 'meeting' (discussion) or 'voting'
-    this.secondsLeft = 60;
-    this.hasVoted = false;
+    this.networkDisposers = [];
     this.playerCards = [];
     this.skipButton = null;
   }
 
-  create(data) {
-    this.cameras.main.setBackgroundColor('#0b0f19');
-    this.myId = data?.myId;
-    this.myRole = data?.myRole;
+  create(data = {}) {
+    this.myId = data.myId;
+    this.players = data.players || [];
     this.phase = 'meeting';
     this.secondsLeft = 60;
     this.hasVoted = false;
     this.playerCards = [];
+    this.layout = meetingLayout(this.scale.width, this.scale.height, this.players.length);
 
-    const panelW = 900;
-    const panelH = 640;
-    const panelX = this.scale.width / 2;
-    const panelY = this.scale.height / 2;
-
-    // 1. Panel Base Principal
-    createPanel(this, panelX, panelY, panelW, panelH, 0x1e293b, { radius: 24, strokeColor: 0x4f46e5, strokeAlpha: 0.5 });
-    
-    // 2. Encabezado y Título
-    this.titleText = createText(this, panelX, panelY - panelH / 2 + 40, '🚨 REUNIÓN DE EMERGENCIA', { 
-      fontSize: '26px', 
-      color: '#f59e0b', 
-      bold: true 
-    }).setOrigin(0.5);
-
-    // 3. Barra de Progreso del Temporizador
-    this.timerBg = this.add.rectangle(panelX, panelY - panelH / 2 + 80, 800, 10, 0x0f172a).setStrokeStyle(1, 0x334155);
-    this.timerFill = this.add.rectangle(panelX - 400, panelY - panelH / 2 + 80, 800, 10, 0xfbbf24).setOrigin(0, 0.5);
-    
-    this.timerText = createText(this, panelX, panelY - panelH / 2 + 105, 'Fase: Discusión (60s)', { 
-      fontSize: '15px', 
-      color: '#cbd5e1', 
-      bold: true 
-    }).setOrigin(0.5);
-
-    // Column coordinates
-    const leftColX = panelX - panelW / 2 + 50;
-    const rightColX = panelX + 50;
-
-    // 4. Panel Izquierdo: Chat de Discusión
-    createText(this, leftColX, panelY - panelH / 2 + 140, '💬 CHAT DE DISCUSIÓN', { 
-      fontSize: '13px', 
-      color: '#94a3b8', 
-      bold: true 
+    drawOfficeBackdrop(this, this.scale.width, this.scale.height, 'meeting');
+    const { panel, titleY, timer, chat, input, mobile } = this.layout;
+    createPanel(this, panel.x, panel.y, panel.width, panel.height, COLORS.white, {
+      radius: 24, strokeColor: COLORS.border, strokeAlpha: 1
     });
 
-    // Chat Box DOM element (Scrollable)
-    this.chatBoxDOM = this.add.dom(panelX - 225, panelY + 40).createFromHTML(`
-      <div id="meeting-chat-box" style="
-        width: 380px;
-        height: 330px;
-        overflow-y: auto;
-        background: #0f172a;
-        border: 2px solid #334155;
-        border-radius: 8px;
-        padding: 12px;
-        box-sizing: border-box;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-        font-size: 13px;
-        color: #cbd5e1;
-        line-height: 1.5;
-      "></div>
-    `).setOrigin(0.5);
+    this.titleText = this.add.text(panel.x, titleY, mobile ? 'REUNIÓN DE EMERGENCIA' : '🚨 REUNIÓN DE EMERGENCIA', {
+      fontFamily: FONT.display,
+      fontSize: mobile ? '18px' : '26px',
+      color: CSS_COLORS.sabotageAccessible,
+      fontStyle: 'bold',
+      align: 'center'
+    }).setOrigin(0.5);
 
-    // Chat Input DOM element
-    this.chatInputDOM = this.add.dom(panelX - 225, panelY + 245).createFromHTML(`
-      <div style="display: flex; gap: 8px; width: 380px; box-sizing: border-box;">
-        <input id="chat-input" type="text" maxlength="150" placeholder="Escribe tu argumento..." style="
-          flex: 1;
-          padding: 10px;
-          font-size: 13px;
-          font-family: sans-serif;
-          background: #1e293b;
-          color: #f8fafc;
-          border: 2px solid #475569;
-          border-radius: 6px;
-          outline: none;
-        " />
-        <button id="chat-send" style="
-          padding: 10px 16px;
-          font-size: 13px;
-          font-weight: bold;
-          font-family: sans-serif;
-          background: #4f46e5;
-          color: white;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-        ">Enviar</button>
-      </div>
-    `).setOrigin(0.5);
+    this.timerBg = this.add.rectangle(timer.x, timer.y, timer.width, timer.height, COLORS.neutral).setStrokeStyle(1, COLORS.border);
+    this.timerFill = this.add.rectangle(timer.x - timer.width / 2, timer.y, timer.width, timer.height, COLORS.task).setOrigin(0, 0.5);
+    this.timerMaxWidth = timer.width;
+    this.timerText = this.add.text(timer.x, timer.y + 17, '', textStyle(mobile ? 11 : 14, CSS_COLORS.ink, true, 'center')).setOrigin(0.5, 0);
 
-    // Configurar eventos de Chat
-    const chatInputEl = document.getElementById('chat-input');
-    const sendBtn = document.getElementById('chat-send');
+    this.add.text(chat.x - chat.width / 2, chat.y - chat.height / 2 - 20, 'DISCUSIÓN', textStyle(12, CSS_COLORS.muted, true));
+    this.add.text(this.layout.cards.x - this.layout.cards.width / 2, this.layout.cards.y - this.layout.cards.height / 2 - 20, 'EQUIPO', textStyle(12, CSS_COLORS.muted, true));
+    this.createChat(chat, input);
+    this.renderVotingArea();
 
-    if (sendBtn) {
-      sendBtn.onclick = () => this.sendChat();
-    }
-    if (chatInputEl) {
-      chatInputEl.onkeydown = (e) => {
-        if (e.key === 'Enter') this.sendChat();
-      };
-    }
-
-    // 5. Panel Derecho: Área de Votación
-    this.votingHeader = createText(this, rightColX, panelY - panelH / 2 + 140, '🗳️ VOTOS DE EXPULSIÓN', { 
-      fontSize: '13px', 
-      color: '#94a3b8', 
-      bold: true 
-    });
-
-    const gameScene = this.scene.get('GameScene');
-    const players = Object.values(gameScene.players || {});
-
-    // Renderizar tarjetas de jugadores y botón de Skip
-    this.renderPlayerCards(players, rightColX, panelY - 110);
-    this.renderSkipCard(panelX + 225, panelY + 245);
-
-    // Iniciar temporizador
     this.timerEvent = this.time.addEvent({
       delay: 1000,
       loop: true,
       callback: () => {
-        if (this.secondsLeft > 0) {
-          this.secondsLeft--;
-          this.updateTimerDisplay();
-        }
+        if (this.secondsLeft > 0) this.secondsLeft--;
+        this.updateTimerDisplay();
       }
     });
-
-    // Configurar listeners de red
     this.setupSocketListeners();
-
-    // Limpieza al salir de la escena
-    this.events.on('shutdown', () => {
-      if (this.timerEvent) this.timerEvent.destroy();
-      if (this.chatBoxDOM) this.chatBoxDOM.destroy();
-      if (this.chatInputDOM) this.chatInputDOM.destroy();
-    });
-
+    this.events.once('shutdown', () => this.cleanup());
     this.updateTimerDisplay();
   }
 
+  createChat(chat, input) {
+    const width = Math.round(chat.width);
+    const height = Math.round(chat.height);
+    this.chatBoxDOM = this.add.dom(chat.x, chat.y).createFromHTML(`
+      <div id="meeting-chat-box" role="log" aria-live="polite" aria-label="Mensajes de la reunión" style="
+        width:${width}px;height:${height}px;overflow-y:auto;box-sizing:border-box;padding:12px;
+        background:#f8fafc;border:2px solid #15203a;border-radius:12px;
+        font:13px/1.45 system-ui,-apple-system,sans-serif;color:#172554;
+      "><div style="color:#64748b">Comparte hechos. Los roles siguen siendo secretos.</div></div>
+    `).setOrigin(0.5);
+
+    this.chatInputDOM = this.add.dom(input.x, input.y).createFromHTML(`
+      <form id="meeting-chat-form" style="display:flex;gap:8px;width:${Math.round(input.width)}px;height:${Math.round(input.height)}px;box-sizing:border-box">
+        <input id="chat-input" aria-label="Escribe tu argumento" maxlength="150" placeholder="¿Qué viste?" style="
+          min-width:0;flex:1;padding:10px 12px;font:14px system-ui,sans-serif;color:#172554;
+          background:#fff;border:2px solid #64748b;border-radius:10px;outline:none;box-sizing:border-box" />
+        <button type="submit" style="min-width:76px;padding:0 12px;font:700 13px system-ui,sans-serif;color:#fff;
+          background:#2563eb;border:2px solid #172554;border-radius:10px;cursor:pointer">Enviar</button>
+      </form>
+    `).setOrigin(0.5);
+    const form = this.chatInputDOM.node.querySelector('form');
+    form.onsubmit = (event) => { event.preventDefault(); this.sendChat(); };
+  }
+
   setupSocketListeners() {
-    // Al recibir un mensaje de chat de reunión
-    net.socket.off('meeting:chat');
-    net.socket.on('meeting:chat', ({ playerId, playerName, message }) => {
-      const chatBox = document.getElementById('meeting-chat-box');
-      if (chatBox) {
-        // Encontrar el color por rol
-        const gameScene = this.scene.get('GameScene');
-        const player = gameScene.players[playerId];
-        const role = player?.role || 'empleado';
-        
-        const roleColors = { 
-          jefe: '#ef4444', 
-          lamebotas: '#facc15', 
-          empleado: '#4ade80' 
-        };
-        const userColor = roleColors[role] || '#60a5fa';
+    net.disposeAll(this.networkDisposers);
+    const on = (event, handler) => this.networkDisposers.push(net.subscribe(event, handler));
 
-        const msgDiv = document.createElement('div');
-        msgDiv.style.marginBottom = '8px';
-        msgDiv.style.wordBreak = 'break-word';
-
-        const nameSpan = document.createElement('span');
-        nameSpan.textContent = playerName;
-        nameSpan.style.color = userColor;
-        nameSpan.style.fontWeight = 'bold';
-
-        const separator = document.createTextNode(': ');
-
-        const textSpan = document.createElement('span');
-        textSpan.textContent = message;
-        textSpan.style.color = '#e2e8f0';
-
-        msgDiv.appendChild(nameSpan);
-        msgDiv.appendChild(separator);
-        msgDiv.appendChild(textSpan);
-        chatBox.appendChild(msgDiv);
-        
-        // Desplazamiento automático al final
-        chatBox.scrollTop = chatBox.scrollHeight;
-      }
-    });
-
-    // Cuando se abre el periodo de votación
-    net.socket.off('voting:started');
-    net.socket.on('voting:started', () => {
+    on('meeting:chat', ({ playerName, message }) => this.appendChat(playerName, message));
+    on('voting:started', () => {
       this.phase = 'voting';
-      this.secondsLeft = 20; // Reajustar a duración de votación (20s)
+      this.secondsLeft = 20;
+      this.renderVotingArea();
       this.updateTimerDisplay();
-      this.showFloatingText('📊 ¡Comienza la votación!', 0xf59e0b);
-      
-      // Re-renderizar tarjetas para habilitar botones
-      const gameScene = this.scene.get('GameScene');
-      const players = Object.values(gameScene.players || {});
-      const panelW = 900;
-      const panelX = this.scale.width / 2;
-      const panelY = this.scale.height / 2;
-      const rightColX = panelX + 50;
-
-      this.playerCards.forEach(card => card.destroy());
-      this.playerCards = [];
-      if (this.skipButton) {
-        this.skipButton.bg.destroy();
-        this.skipButton.label.destroy();
-        this.skipButton.hit.destroy();
-        if (this.skipButton.shadow) this.skipButton.shadow.destroy();
-      }
-
-      this.renderPlayerCards(players, rightColX, panelY - 110);
-      this.renderSkipCard(panelX + 225, panelY + 245);
+      this.showFloatingText('¡Comienza la votación!', COLORS.task);
     });
-
-    // Cuando termina la votación
-    net.socket.off('voting:ended');
-    net.socket.on('voting:ended', (result) => {
-      if (this.timerEvent) this.timerEvent.destroy();
-      this.showVotingResult(result);
-    });
-
-    // Confirmación del voto emitido por mí
-    net.socket.off('vote:confirmed');
-    net.socket.on('vote:confirmed', ({ targetId }) => {
+    on('vote:confirmed', () => {
       this.hasVoted = true;
-      this.showFloatingText('Voto registrado', 0x4ade80);
-      
-      // Re-renderizar para deshabilitar los botones de votación
-      const gameScene = this.scene.get('GameScene');
-      const players = Object.values(gameScene.players || {});
-      const panelW = 900;
-      const panelX = this.scale.width / 2;
-      const panelY = this.scale.height / 2;
-      const rightColX = panelX + 50;
-
-      this.playerCards.forEach(card => card.destroy());
-      this.playerCards = [];
-      if (this.skipButton) {
-        this.skipButton.bg.destroy();
-        this.skipButton.label.destroy();
-        this.skipButton.hit.destroy();
-        if (this.skipButton.shadow) this.skipButton.shadow.destroy();
-      }
-
-      this.renderPlayerCards(players, rightColX, panelY - 110);
-      this.renderSkipCard(panelX + 225, panelY + 245);
+      this.renderVotingArea();
+      this.showFloatingText('Voto registrado', COLORS.success);
     });
-
-    // Volver a la escena de juego
-    net.socket.off('game:update');
-    net.socket.on('game:update', (gs) => {
-      if (gs.phase === 'playing') {
+    on('voting:ended', (result) => {
+      this.timerEvent?.destroy();
+      this.showVotingResult(result);
+      this.time.delayedCall(1600, () => {
         this.scene.stop('MeetingScene');
         this.scene.resume('GameScene');
-      }
+      });
     });
+  }
 
-    net.socket.off('game:ended');
-    net.socket.on('game:ended', (data) => {
-      this.scene.stop('MeetingScene');
-      this.scene.start('EndScene', data);
+  appendChat(playerName, message) {
+    const box = this.chatBoxDOM?.node?.querySelector('#meeting-chat-box');
+    if (!box) return;
+    const row = document.createElement('div');
+    row.style.marginTop = '8px';
+    row.style.wordBreak = 'break-word';
+    const name = document.createElement('strong');
+    name.textContent = `${playerName}: `;
+    name.style.color = CSS_COLORS.primary;
+    const text = document.createElement('span');
+    text.textContent = message;
+    row.append(name, text);
+    box.appendChild(row);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  renderVotingArea() {
+    this.playerCards.splice(0).forEach((card) => card.destroy());
+    this.destroyButton(this.skipButton);
+    this.skipButton = null;
+
+    const { cards, visiblePlayers } = this.layout;
+    this.players.slice(0, visiblePlayers).forEach((player, index) => {
+      const col = index % cards.columns;
+      const row = Math.floor(index / cards.columns);
+      const x = cards.x + col * (cards.width + cards.gapX);
+      const y = cards.y + row * (cards.height + cards.gapY);
+      this.playerCards.push(this.createPlayerCard(player, x, y, cards.width, cards.height));
     });
+    this.renderSkipCard();
+  }
+
+  createPlayerCard(player, x, y, width, height) {
+    const elements = [];
+    const panel = createPanel(this, x, y, width, height, COLORS.surface, {
+      radius: 12,
+      strokeColor: player.id === this.myId ? COLORS.primary : COLORS.border,
+      strokeAlpha: 1
+    });
+    elements.push(panel);
+    const left = x - width / 2 + 10;
+    const name = this.add.text(left, y - height / 2 + 9, String(player.name || 'Jugador').slice(0, 14), textStyle(13, CSS_COLORS.ink, true));
+    const state = this.add.text(left, y + 7, player.burnout ? 'BURNOUT' : 'ACTIVO', textStyle(10, player.burnout ? CSS_COLORS.sabotageAccessible : CSS_COLORS.success, true));
+    elements.push(name, state);
+
+    let button;
+    if (player.id === this.myId) {
+      elements.push(this.add.text(x + width / 2 - 12, y + 8, 'TÚ', textStyle(10, CSS_COLORS.primary, true)).setOrigin(1, 0.5));
+    } else if (this.phase === 'voting' && !this.hasVoted) {
+      const mobileVote = this.layout.mobile;
+      button = createButton(this, x + width / 2 - (mobileVote ? 40 : 37), y + (mobileVote ? 7 : 9), 'VOTAR', () => this.castVote(player.id), {
+        width: mobileVote ? 68 : 64,
+        height: mobileVote ? 40 : 30,
+        fontSize: '10px', bgColor: COLORS.sabotageAccessible, bgHover: COLORS.sabotage, radius: 9
+      });
+    } else {
+      const label = this.hasVoted ? 'VOTADO' : 'HABLANDO';
+      elements.push(this.add.text(x + width / 2 - 10, y + 9, label, textStyle(9, CSS_COLORS.muted, true)).setOrigin(1, 0.5));
+    }
+    return { destroy: () => { elements.forEach((element) => element?.destroy()); this.destroyButton(button); } };
+  }
+
+  renderSkipCard() {
+    const { skip } = this.layout;
+    const waiting = this.phase === 'meeting';
+    const label = waiting ? 'LA VOTACIÓN ABRE EN BREVE' : this.hasVoted ? 'VOTO REGISTRADO' : 'OMITIR VOTO';
+    this.skipButton = createButton(this, skip.x, skip.y, label, () => this.castVote('skip'), {
+      width: skip.width,
+      height: skip.height,
+      fontSize: this.layout.mobile ? '11px' : '12px',
+      bgColor: waiting || this.hasVoted ? COLORS.disabled : COLORS.primary,
+      bgHover: COLORS.ink,
+      textColor: '#ffffff',
+      radius: 12
+    });
+    if (waiting || this.hasVoted) this.skipButton.hit.disableInteractive();
+  }
+
+  destroyButton(button) {
+    if (!button) return;
+    button.bg?.destroy();
+    button.label?.destroy();
+    button.hit?.destroy();
+    button.shadow?.destroy();
   }
 
   updateTimerDisplay() {
+    if (!this.timerFill) return;
     const duration = this.phase === 'voting' ? 20 : 60;
-    const ratio = Math.max(0, this.secondsLeft / duration);
-    this.timerFill.width = 800 * ratio;
-
-    const phaseText = this.phase === 'voting' ? 'VOTACIÓN' : 'DISCUSIÓN';
-    const color = this.phase === 'voting' ? '#ef4444' : '#fbbf24';
-    this.timerText.setText(`⏱ Fase: ${phaseText} (${this.secondsLeft}s)`);
-    this.timerText.setColor(color);
-  }
-
-  renderPlayerCards(players, startX, startY) {
-    const cardW = 180;
-    const cardH = 75;
-    const gapX = 20;
-    const gapY = 15;
-
-    const roleNames = { jefe: 'Jefe 👔', lamebotas: 'Lamebotas 🤡', empleado: 'Empleado 🛠' };
-    const roleColors = { jefe: '#ef4444', lamebotas: '#facc15', empleado: '#4ade80' };
-
-    players.forEach((p, idx) => {
-      const col = idx % 2;
-      const row = Math.floor(idx / 2);
-      const cardX = startX + col * (cardW + gapX) + cardW / 2;
-      const cardY = startY + row * (cardH + gapY) + cardH / 2;
-
-      // Crear un contenedor de Phaser para agrupar visualmente la tarjeta
-      const cardContainer = this.add.container(cardX, cardY);
-      this.playerCards.push(cardContainer);
-
-      // Fondo de la tarjeta
-      const bg = this.add.rectangle(0, 0, cardW, cardH, 0x0f172a).setStrokeStyle(2, p.id === this.myId ? 0x6366f1 : 0x334155);
-      cardContainer.add(bg);
-
-      // Nombre
-      const nameText = this.add.text(-80, -22, p.name, {
-        fontSize: '13px',
-        color: '#ffffff',
-        fontStyle: 'bold'
-      });
-      cardContainer.add(nameText);
-
-      // Badge de Rol
-      const badgeText = roleNames[p.role] || 'Empleado 🛠';
-      const badgeColor = roleColors[p.role] || '#94a3b8';
-      const roleText = this.add.text(-80, -2, badgeText, {
-        fontSize: '10px',
-        color: badgeColor,
-        fontStyle: 'bold'
-      });
-      cardContainer.add(roleText);
-
-      // Botón o Etiqueta de Voto
-      if (p.id === this.myId) {
-        // Nosotros
-        const selfText = this.add.text(45, 12, '[ TÚ ]', {
-          fontSize: '11px',
-          color: '#6366f1',
-          fontStyle: 'bold'
-        }).setOrigin(0.5);
-        cardContainer.add(selfText);
-      } else {
-        if (this.phase === 'meeting') {
-          // Fase discusión: no se puede votar todavía
-          const statusText = this.add.text(45, 12, '💬 Hablando', {
-            fontSize: '11px',
-            color: '#64748b'
-          }).setOrigin(0.5);
-          cardContainer.add(statusText);
-        } else {
-          // Fase votación
-          if (this.hasVoted) {
-            // Ya votamos: deshabilitado
-            const statusText = this.add.text(45, 12, '🔒 Votado', {
-              fontSize: '11px',
-              color: '#475569',
-              fontStyle: 'bold'
-            }).setOrigin(0.5);
-            cardContainer.add(statusText);
-          } else {
-            // Se puede votar por este jugador
-            const voteBtn = createButton(this, 45, 12, 'Votar', () => {
-              this.castVote(p.id);
-            }, { 
-              width: 70, 
-              height: 26, 
-              fontSize: '11px', 
-              bgColor: 0x7c2d12, 
-              bgHover: 0xef4444,
-              radius: 6
-            });
-            // Añadir los componentes visuales del botón al contenedor (devolviendo origen local)
-            // Ya que el botón usa coordenadas globales en createButton, modificamos su posición relativa
-            voteBtn.bg.x = 45;
-            voteBtn.bg.y = 12;
-            voteBtn.label.x = 45;
-            voteBtn.label.y = 11;
-            voteBtn.hit.x = cardX + 45;
-            voteBtn.hit.y = cardY + 12;
-            
-            cardContainer.add(voteBtn.bg);
-            cardContainer.add(voteBtn.label);
-            
-            // Registrar los gráficos para que se destruyan en cascada
-            cardContainer.on('destroy', () => {
-              voteBtn.bg?.destroy();
-              voteBtn.label?.destroy();
-              voteBtn.hit?.destroy();
-              if (voteBtn.shadow) voteBtn.shadow.destroy();
-            });
-          }
-        }
-      }
-    });
-  }
-
-  renderSkipCard(x, y) {
-    if (this.phase === 'meeting') {
-      this.skipButton = createButton(this, x, y, 'Esperando fin de discusión...', () => {}, { 
-        width: 380, 
-        height: 38, 
-        fontSize: '12px', 
-        bgColor: 0x1e293b,
-        textColor: '#64748b'
-      });
-      this.skipButton.hit.disableInteractive();
-    } else if (this.hasVoted) {
-      this.skipButton = createButton(this, x, y, '✓ Voto registrado', () => {}, { 
-        width: 380, 
-        height: 38, 
-        fontSize: '12px', 
-        bgColor: 0x1e293b,
-        textColor: '#10b981'
-      });
-      this.skipButton.hit.disableInteractive();
-    } else {
-      this.skipButton = createButton(this, x, y, '🗳️ Omitir Voto (Skip)', () => {
-        this.castVote('skip');
-      }, { 
-        width: 380, 
-        height: 38, 
-        fontSize: '12px', 
-        bgColor: 0x475569, 
-        bgHover: 0x64748b 
-      });
-    }
+    this.timerFill.width = this.timerMaxWidth * Math.max(0, this.secondsLeft / duration);
+    const phase = this.phase === 'voting' ? 'VOTACIÓN' : 'DISCUSIÓN';
+    this.timerText.setText(`${phase} · ${this.secondsLeft}s`);
+    this.timerText.setColor(this.phase === 'voting' ? CSS_COLORS.sabotageAccessible : CSS_COLORS.ink);
+    this.timerFill.setFillStyle(this.phase === 'voting' ? COLORS.sabotageAccessible : COLORS.task);
   }
 
   castVote(targetId) {
@@ -440,117 +208,62 @@ export class MeetingScene extends Phaser.Scene {
     net.castVote(targetId);
   }
 
-  showVotingResult(result) {
-    const panelX = this.scale.width / 2;
-    const panelY = this.scale.height / 2;
-    const gameScene = this.scene.get('GameScene');
+  sendChat() {
+    const input = this.chatInputDOM?.node?.querySelector('#chat-input');
+    const message = input?.value.trim();
+    if (!message) return;
+    net.sendChat(message);
+    input.value = '';
+  }
 
-    // 1. Overlay oscuro bloqueante
-    const overlay = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.8)
-      .setOrigin(0, 0)
-      .setDepth(2000);
-
-    // 2. Panel de Resultados
-    const resultsPanel = createPanel(this, panelX, panelY, 520, 440, 0x0f172a, { 
-      strokeColor: 0xfbbf24, 
-      strokeAlpha: 0.8, 
-      radius: 24 
-    });
-    resultsPanel.setDepth(2001);
-
-    // 3. Título
-    const titleText = createText(this, panelX, panelY - 170, '📊 RESULTADOS DE LA VOTACIÓN', { 
-      fontSize: '20px', 
-      color: '#fbbf24', 
-      bold: true 
+  showVotingResult(result = {}) {
+    this.chatBoxDOM?.setVisible(false);
+    this.chatInputDOM?.setVisible(false);
+    const width = Math.min(520, this.scale.width - 24);
+    const height = Math.min(400, this.scale.height - 24);
+    const x = this.scale.width / 2;
+    const y = this.scale.height / 2;
+    this.add.rectangle(0, 0, this.scale.width, this.scale.height, COLORS.ink, 0.78).setOrigin(0).setDepth(2000);
+    createPanel(this, x, y, width, height, COLORS.surface, { radius: 22, strokeColor: COLORS.border, strokeAlpha: 1 }).setDepth(2001);
+    this.add.text(x, y - height / 2 + 34, 'RESULTADO DE LA VOTACIÓN', {
+      fontFamily: FONT.display, fontSize: this.layout.mobile ? '17px' : '21px', color: CSS_COLORS.ink, fontStyle: 'bold'
     }).setOrigin(0.5).setDepth(2002);
 
-    // 4. Detalle de los votos recibidos
-    let tallyStr = '';
-    if (result.tally) {
-      for (const [targetId, count] of Object.entries(result.tally)) {
-        const player = gameScene.players[targetId];
-        const name = player ? player.name : targetId;
-        const countText = count === 1 ? 'voto' : 'votos';
-        tallyStr += `• ${name}: ${count} ${countText}\n`;
-      }
-    }
-    if (!tallyStr) {
-      tallyStr = 'No se registraron votos por ningún jugador.\n';
-    }
-
-    const tallyText = createText(this, panelX, panelY - 80, tallyStr, {
-      fontSize: '14px',
-      color: '#e2e8f0',
-      align: 'center',
-      wrap: 440
+    const nameOf = (id) => id === 'skip' ? 'Omitir' : this.players.find((player) => player.id === id)?.name || id;
+    const tally = Object.entries(result.tally || {}).map(([id, count]) => `${nameOf(id)} · ${count}`).join('\n') || 'Sin votos registrados';
+    this.add.text(x, y - 78, tally, {
+      ...textStyle(14, CSS_COLORS.ink, false, 'center'), wordWrap: { width: width - 52 }
     }).setOrigin(0.5, 0).setDepth(2002);
 
-    // 5. Destacar Sanción
-    let sanctionStr = '';
-    let sanctionBgColor = 0x1e293b;
-    let sanctionStrokeColor = 0x475569;
-
-    if (result.sanctioned) {
-      const player = gameScene.players[result.sanctioned];
-      const name = player ? player.name : result.sanctioned;
-      const type = result.sanctionType === 'suspend' ? 'SUSPENDIDO (EXPULSADO)' : result.sanctionType;
-      sanctionStr = `⚠️ SANCIÓN: ${name} ha sido ${type}`;
-      sanctionBgColor = 0x7f1d1d; // Dark red
-      sanctionStrokeColor = 0xef4444; // Red
-    } else {
-      sanctionStr = '🕊️ SIN SANCIÓN: Votos insuficientes o empate';
-      sanctionBgColor = 0x064e3b; // Dark green
-      sanctionStrokeColor = 0x10b981; // Green
-    }
-
-    const sanctionBox = createPanel(this, panelX, panelY + 110, 440, 60, sanctionBgColor, { 
-      radius: 12, 
-      strokeColor: sanctionStrokeColor, 
-      strokeAlpha: 0.8 
-    });
-    sanctionBox.setDepth(2002);
-
-    const sanctionText = createText(this, panelX, panelY + 110, sanctionStr, {
-      fontSize: '14px',
-      color: '#ffffff',
-      bold: true
+    const sanctioned = result.sanctioned ? nameOf(result.sanctioned) : null;
+    const outcome = sanctioned
+      ? `${sanctioned}: ${result.sanctionType === 'suspend' ? 'SUSPENSIÓN' : 'BLOQUEO DE HABILIDAD'}`
+      : 'SIN SANCIÓN · EMPATE O MAYORÍA INSUFICIENTE';
+    const outcomeColor = sanctioned ? COLORS.sabotageAccessible : COLORS.success;
+    createPanel(this, x, y + 88, width - 40, 70, sanctioned ? 0xffe4e6 : 0xdcfce7, {
+      radius: 12, strokeColor: outcomeColor, strokeAlpha: 1
+    }).setDepth(2002);
+    this.add.text(x, y + 88, outcome, {
+      ...textStyle(this.layout.mobile ? 12 : 14, sanctioned ? CSS_COLORS.sabotageAccessible : '#157a36', true, 'center'),
+      wordWrap: { width: width - 68 }
     }).setOrigin(0.5).setDepth(2003);
-
-    // 6. Mensaje de cierre de reunión
-    const closeText = createText(this, panelX, panelY + 185, 'Regresando a la oficina...', {
-      fontSize: '12px',
-      color: '#94a3b8',
-      bold: true
-    }).setOrigin(0.5).setDepth(2002);
+    this.add.text(x, y + height / 2 - 34, 'Regresando a la oficina…', textStyle(12, CSS_COLORS.muted, true, 'center')).setOrigin(0.5).setDepth(2002);
   }
 
-  sendChat() {
-    const chatInputEl = document.getElementById('chat-input');
-    if (!chatInputEl) return;
-    const msg = chatInputEl.value.trim();
-    if (msg) {
-      net.sendChat(msg);
-      chatInputEl.value = '';
-    }
-  }
-
-  showFloatingText(text, color = 0xffffff) {
-    const ft = this.add.text(this.scale.width / 2, 120, text, {
-      fontSize: '16px',
-      color: '#' + color.toString(16).padStart(6, '0'),
-      fontStyle: 'bold',
-      backgroundColor: '#000000aa',
-      padding: { x: 14, y: 6 },
-      shadow: { fill: true, blur: 2, y: 1 }
+  showFloatingText(text, color = COLORS.task) {
+    const toast = this.add.text(this.scale.width / 2, 100, text, {
+      ...textStyle(this.layout.mobile ? 12 : 15, `#${color.toString(16).padStart(6, '0')}`, true, 'center'),
+      backgroundColor: '#172554ee', padding: { x: 12, y: 6 }, wordWrap: { width: this.scale.width - 40 }
     }).setOrigin(0.5).setDepth(9999);
-    
-    this.tweens.add({
-      targets: ft,
-      y: 90,
-      alpha: 0,
-      duration: 2000,
-      onComplete: () => ft.destroy()
-    });
+    this.tweens.add({ targets: toast, y: 82, alpha: 0, duration: 1800, onComplete: () => toast.destroy() });
+  }
+
+  cleanup() {
+    net.disposeAll(this.networkDisposers);
+    this.timerEvent?.destroy();
+    this.playerCards.splice(0).forEach((card) => card.destroy());
+    this.destroyButton(this.skipButton);
+    this.chatBoxDOM?.destroy();
+    this.chatInputDOM?.destroy();
   }
 }

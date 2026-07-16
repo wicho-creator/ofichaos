@@ -4,6 +4,9 @@ import * as net from '../systems/networking.js';
 import { createButton, createPanel, createText } from '../systems/ui.js';
 import { createPlayerSprite, updatePlayerSprite } from '../systems/player.js';
 import { TASKS as CLIENT_TASKS } from '../systems/tasks.js';
+import { getRoleBriefing } from '../systems/onboarding.js';
+import { WORLD_BOUNDS, OFFICE_ZONES, getZoneCenter, findNearestTaskZone } from '../systems/world.js';
+import { gameHudLayout } from '../systems/theme.js';
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -37,15 +40,29 @@ export class GameScene extends Phaser.Scene {
 
     // Active task minigame
     this.activeTaskPanel = null;
+    this.networkDisposers = [];
+  }
+
+  resetRunState() {
+    this.players = {};
+    this.sprites = {};
+    this.gameState = null;
+    this.activeTaskPanel = null;
+    this.activeSabotageMenu = null;
+    this.briefingOpen = false;
+    this.mobileInput = { left: false, right: false, up: false, down: false };
+    net.disposeAll(this.networkDisposers);
   }
 
   create(data) {
-    this.cameras.main.setBackgroundColor('#0f0f23');
+    this.resetRunState();
+    this.cameras.main.setBackgroundColor('#dbeafe');
     this.roomCode = data?.roomCode;
     this.myId = data?.myId;
     this.myRole = data?.myRole;
     this.roleText = data?.roleText || '';
 
+    this.createMapTextures();
     // Mapa de oficina (fondo)
     this.drawMap();
 
@@ -79,7 +96,6 @@ export class GameScene extends Phaser.Scene {
       { name: 'Rack 1', x: 530, y: 670, w: 50, h: 120, color: 0x6366f1 },
       { name: 'Rack 2', x: 650, y: 670, w: 50, h: 120, color: 0x6366f1 }
     ];
-    this.createMapTextures();
     for (const obs of obstacleData) {
       const cx = obs.x + obs.w / 2;
       const cy = obs.y + obs.h / 2;
@@ -89,7 +105,7 @@ export class GameScene extends Phaser.Scene {
       this.drawObstacleDecoration(obs, cx, cy);
     }
 
-    this.cameras.main.setBounds(0, 0, 1200, 900);
+    this.cameras.main.setBounds(WORLD_BOUNDS.x, WORLD_BOUNDS.y, WORLD_BOUNDS.w, WORLD_BOUNDS.h);
     this.cameras.main.setZoom(this.scale.height < 700 ? 0.9 : 1.15);
 
     // Controles
@@ -106,6 +122,7 @@ export class GameScene extends Phaser.Scene {
     this.scale.on('resize', this.resize, this);
     this.events.once('shutdown', () => {
       this.scale.off('resize', this.resize, this);
+      net.disposeAll(this.networkDisposers);
       if (this.sabotageTween) {
         this.sabotageTween.stop();
         this.sabotageTween = null;
@@ -114,6 +131,7 @@ export class GameScene extends Phaser.Scene {
 
     // Listeners socket
     this.setupSocketListeners();
+    this.time.delayedCall(100, () => this.showRoleBriefing());
 
     if (data?.demoState) {
       this.time.delayedCall(80, () => this.loadDemoState(data.demoState));
@@ -129,99 +147,76 @@ export class GameScene extends Phaser.Scene {
   }
 
   drawMap() {
-    // 1. Draw tiled background carpet floor
-    this.add.tileSprite(0, 0, 1200, 900, 'floor_carpet_general').setOrigin(0);
+    this.add.tileSprite(0, 0, WORLD_BOUNDS.w, WORLD_BOUNDS.h, 'floor_carpet_general').setOrigin(0).setDepth(-3);
 
-    // Zonas del mapa
     const zoneColors = {
-      recepcion: 0x3b82f6,
-      cubiculos: 0x10b981,
-      juntas: 0xf59e0b,
-      cocina: 0xef4444,
+      recepcion: 0x2563eb,
+      cubiculos: 0x22c55e,
+      juntas: 0xf6c344,
+      cocina: 0xf05a5a,
       archivo: 0x8b5cf6,
-      jefe_oficina: 0xdc2626,
+      jefe_oficina: 0xd83a4a,
       rh: 0x06b6d4,
       servidor: 0x6366f1
     };
-
-    const zones = [
-      { id: 'recepcion', name: 'Recepción', x: 100, y: 100, w: 250, h: 200 },
-      { id: 'cubiculos', name: 'Cubículos', x: 450, y: 100, w: 300, h: 200 },
-      { id: 'juntas', name: 'Sala de Juntas', x: 850, y: 100, w: 250, h: 200 },
-      { id: 'cocina', name: 'Cocina', x: 100, y: 400, w: 200, h: 180 },
-      { id: 'archivo', name: 'Archivo', x: 400, y: 400, w: 200, h: 180 },
-      { id: 'jefe_oficina', name: 'Oficina del Jefe', x: 700, y: 400, w: 200, h: 180 },
-      { id: 'rh', name: 'Recursos Humanos', x: 100, y: 650, w: 250, h: 180 },
-      { id: 'servidor', name: 'Servidor / IT', x: 500, y: 650, w: 250, h: 180 }
-    ];
-
     const g = this.add.graphics();
 
-    for (const z of zones) {
-      // 2. Tile backgrounds or colored overlay for rooms
-      if (z.id === 'cocina') {
-        // Checkered tile floor
-        this.add.tileSprite(z.x, z.y, z.w, z.h, 'floor_kitchen_tile').setOrigin(0);
-        g.fillStyle(0xef4444, 0.06);
-        g.fillRect(z.x, z.y, z.w, z.h);
-      } else if (z.id === 'servidor') {
-        // Tech metallic grid floor
-        this.add.tileSprite(z.x, z.y, z.w, z.h, 'floor_server_grid').setOrigin(0);
-        g.fillStyle(0x6366f1, 0.06);
-        g.fillRect(z.x, z.y, z.w, z.h);
-      } else {
-        // Semi-transparent colored overlay to tint carpet
-        const color = zoneColors[z.id] || 0x475569;
-        g.fillStyle(color, 0.12);
-        g.fillRect(z.x, z.y, z.w, z.h);
+    // Pasillos anchos: la circulación debe leerse antes que la decoración.
+    g.lineStyle(22, 0xffffff, 0.7);
+    g.lineBetween(350, 200, 450, 200);
+    g.lineBetween(750, 200, 850, 200);
+    g.lineBetween(225, 300, 225, 400);
+    g.lineBetween(500, 300, 500, 400);
+    g.lineBetween(800, 300, 800, 400);
+    g.lineStyle(2, 0x172554, 0.16);
+    g.lineBetween(350, 200, 450, 200);
+    g.lineBetween(750, 200, 850, 200);
+    g.lineBetween(225, 300, 225, 400);
+    g.lineBetween(500, 300, 500, 400);
+    g.lineBetween(800, 300, 800, 400);
+
+    for (const zone of OFFICE_ZONES) {
+      const color = zoneColors[zone.id] || 0x64748b;
+      g.fillStyle(0x172554, 0.14);
+      g.fillRoundedRect(zone.x + 6, zone.y + 7, zone.w, zone.h, 18);
+      g.fillStyle(0xffffff, 0.9);
+      g.fillRoundedRect(zone.x, zone.y, zone.w, zone.h, 18);
+
+      if (zone.id === 'cocina') {
+        this.add.tileSprite(zone.x + 4, zone.y + 4, zone.w - 8, zone.h - 8, 'floor_kitchen_tile')
+          .setOrigin(0).setAlpha(0.48).setDepth(-1);
+      } else if (zone.id === 'servidor') {
+        this.add.tileSprite(zone.x + 4, zone.y + 4, zone.w - 8, zone.h - 8, 'floor_server_grid')
+          .setOrigin(0).setAlpha(0.55).setDepth(-1);
       }
 
-      // 3. Double-outline walls with outer shadow and neon glow strip
-      const color = zoneColors[z.id] || 0x475569;
+      g.fillStyle(color, 0.13);
+      g.fillRoundedRect(zone.x + 4, zone.y + 4, zone.w - 8, zone.h - 8, 14);
+      g.lineStyle(4, 0x15203a, 0.92);
+      g.strokeRoundedRect(zone.x, zone.y, zone.w, zone.h, 18);
+      g.lineStyle(2, color, 0.95);
+      g.strokeRoundedRect(zone.x + 5, zone.y + 5, zone.w - 10, zone.h - 10, 13);
 
-      // Soft shadow border
-      g.lineStyle(8, 0x000000, 0.35);
-      g.strokeRect(z.x - 2, z.y - 2, z.w + 4, z.h + 4);
-
-      // Main thick slate wall core
-      g.lineStyle(6, 0x1e293b, 1.0);
-      g.strokeRect(z.x, z.y, z.w, z.h);
-
-      // Glowing inner divider strip
-      g.lineStyle(2, color, 0.85);
-      g.strokeRect(z.x, z.y, z.w, z.h);
-
-      // Inner border offset for double line style
-      g.lineStyle(1, 0x0f172a, 0.5);
-      g.strokeRect(z.x + 3, z.y + 3, z.w - 6, z.h - 6);
-
-      // Room Title
-      this.add.text(z.x + z.w / 2, z.y + 16, z.name, {
-        fontSize: '13px',
-        color: '#f8fafc',
+      this.add.text(zone.x + zone.w / 2, zone.y + 17, zone.name.toUpperCase(), {
+        fontSize: '12px',
+        color: '#172554',
         fontStyle: 'bold',
-        shadow: { fill: true, blur: 4, color: '#000000', y: 1 }
+        backgroundColor: '#ffffffdd',
+        padding: { x: 8, y: 4 }
       }).setOrigin(0.5);
 
-      // Task in Zone text
-      const taskInZone = CLIENT_TASKS.find((t) => t.zone === z.id);
-      if (taskInZone) {
-        this.add.text(z.x + z.w / 2, z.y + z.h - 16, `📋 ${taskInZone.name}`, {
+      const task = CLIENT_TASKS.find((item) => item.zone === zone.id);
+      if (task) {
+        const taskLabel = this.add.text(zone.x + zone.w / 2, zone.y + zone.h - 17, task.name, {
           fontSize: '11px',
-          color: '#fbbf24',
+          color: '#172554',
           fontStyle: 'bold',
-          shadow: { fill: true, blur: 2, color: '#000000', y: 1 }
+          backgroundColor: '#f6c344',
+          padding: { x: 8, y: 4 }
         }).setOrigin(0.5);
+        this.tweens.add({ targets: taskLabel, scaleX: 1.04, scaleY: 1.04, duration: 900, yoyo: true, repeat: -1 });
       }
     }
-
-    // Nice visual pathways between offices
-    g.lineStyle(4, 0x334155, 0.45);
-    g.lineBetween(350, 200, 450, 200); // recepción -> cubículos
-    g.lineBetween(750, 200, 850, 200); // cubículos -> juntas
-    g.lineBetween(225, 300, 225, 400); // recepción -> cocina
-    g.lineBetween(500, 300, 500, 400); // cubículos -> archivo
-    g.lineBetween(800, 300, 800, 400); // juntas -> jefe
   }
 
   createHUD() {
@@ -229,8 +224,8 @@ export class GameScene extends Phaser.Scene {
 
     // Sabotage warning overlay
     this.sabotageOverlay = this.add.graphics();
-    this.sabotageOverlay.fillStyle(0xef4444, 1);
-    this.sabotageOverlay.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.sabotageOverlay.lineStyle(12, 0xd83a4a, 1);
+    this.sabotageOverlay.strokeRoundedRect(6, 6, this.scale.width - 12, this.scale.height - 12, 18);
     this.sabotageOverlay.setScrollFactor(0);
     this.sabotageOverlay.setDepth(50);
     this.sabotageOverlay.setAlpha(0);
@@ -247,42 +242,42 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(101).setVisible(false);
 
     // 1. Header Panel y Textos
-    this.hud.headerPanel = createPanel(this, 0, 0, 100, 100, 0x0b1220, { strokeColor: 0xfbbf24, strokeAlpha: 0.28, radius: 18 });
-    this.hud.timerText = this.add.text(0, 0, '⏱ 8:00', { fontStyle: 'bold', color: '#fbbf24' }).setOrigin(0.5, 0.5);
-    this.hud.taskPercentText = this.add.text(0, 0, '📋 Tareas 0%', { fontStyle: 'bold', color: '#4ade80' }).setOrigin(0.5, 0.5);
-    this.hud.helpText = this.add.text(0, 0, 'WASD/Flechas · E o botón azul para trabajar', { fontSize: '10px', color: '#94a3b8' }).setOrigin(0.5);
+    this.hud.headerPanel = createPanel(this, 0, 0, 100, 100, 0xffffff, { strokeColor: 0x15203a, strokeAlpha: 0.9, radius: 18 });
+    this.hud.timerText = this.add.text(0, 0, '8:00', { fontStyle: 'bold', color: '#172554' }).setOrigin(0.5, 0.5);
+    this.hud.taskPercentText = this.add.text(0, 0, 'Tareas 0%', { fontStyle: 'bold', color: '#157a36' }).setOrigin(0.5, 0.5);
+    this.hud.helpText = this.add.text(0, 0, 'WASD/Flechas · E para trabajar', { fontSize: '10px', color: '#475569' }).setOrigin(0.5);
 
     this.timerText = this.hud.timerText;
     this.taskPercentText = this.hud.taskPercentText;
 
     // 2. Role Panel
-    const roleColors = { jefe: '#ef4444', lamebotas: '#facc15', empleado: '#4ade80' };
+    const roleColors = { jefe: '#d83a4a', lamebotas: '#9a6700', empleado: '#157a36' };
     const roleName = { jefe: 'JEFE', lamebotas: 'LAMEBOTAS', empleado: 'EMPLEADO' };
-    this.hud.rolePanel = createPanel(this, 0, 0, 100, 100, 0x111827, { strokeColor: 0x38bdf8, strokeAlpha: 0.24, radius: 20 });
-    this.hud.roleDisplay = this.add.text(0, 0, `ROL: ${roleName[this.myRole] || '?'}`, {
-      color: roleColors[this.myRole] || '#94a3b8', fontStyle: 'bold'
+    this.hud.rolePanel = createPanel(this, 0, 0, 100, 100, 0xffffff, { strokeColor: 0x2563eb, strokeAlpha: 0.9, radius: 20 });
+    this.hud.roleDisplay = this.add.text(0, 0, roleName[this.myRole] || '?', {
+      color: roleColors[this.myRole] || '#475569', fontStyle: 'bold'
     }).setOrigin(0.5);
-    this.hud.roleObjectiveLabel = this.add.text(0, 0, 'Objetivo secundario', { fontSize: '10px', color: '#94a3b8' }).setOrigin(0.5);
+    this.hud.roleObjectiveLabel = this.add.text(0, 0, 'OBJETIVO PRIVADO', { fontSize: '10px', color: '#64748b' }).setOrigin(0.5);
     this.hud.roleDescription = this.add.text(0, 0, this.roleText || 'Sobrevive al caos de la oficina', {
-      color: '#f8fafc', align: 'center'
+      color: '#172554', align: 'center'
     }).setOrigin(0.5);
 
     this.roleDisplay = this.hud.roleDisplay;
 
     // 3. Status/Moral Panel
-    this.hud.statusPanel = createPanel(this, 0, 0, 100, 100, 0x111827, { strokeColor: 0x22c55e, strokeAlpha: 0.22, radius: 20 });
-    this.hud.moraleLabel = this.add.text(0, 0, '😊 Moral del equipo', { color: '#cbd5e1', fontStyle: 'bold' });
-    this.hud.moraleBar = this.add.rectangle(0, 0, 100, 14, 0x334155).setOrigin(0.5);
-    this.hud.moraleFill = this.add.rectangle(0, 0, 100, 14, 0x4ade80).setOrigin(0, 0.5);
-    this.hud.tasksLabel = this.add.text(0, 0, 'Tareas activas', { color: '#94a3b8', fontStyle: 'bold' });
-    this.hud.tasksList = this.add.text(0, 0, '', { color: '#e2e8f0', lineSpacing: 2 }).setOrigin(0, 0);
+    this.hud.statusPanel = createPanel(this, 0, 0, 100, 100, 0xffffff, { strokeColor: 0x22c55e, strokeAlpha: 0.9, radius: 20 });
+    this.hud.moraleLabel = this.add.text(0, 0, 'MORAL', { color: '#172554', fontStyle: 'bold' });
+    this.hud.moraleBar = this.add.rectangle(0, 0, 100, 14, 0xcbd5e1).setOrigin(0.5);
+    this.hud.moraleFill = this.add.rectangle(0, 0, 100, 14, 0x22c55e).setOrigin(0, 0.5);
+    this.hud.tasksLabel = this.add.text(0, 0, 'TAREAS ACTIVAS', { color: '#64748b', fontStyle: 'bold' });
+    this.hud.tasksList = this.add.text(0, 0, '', { color: '#172554', lineSpacing: 2 }).setOrigin(0, 0);
 
     this.moraleBar = this.hud.moraleBar;
     this.moraleFill = this.hud.moraleFill;
     this.tasksList = this.hud.tasksList;
 
     // 4. Action Panel & Buttons
-    this.hud.actionPanel = createPanel(this, 0, 0, 100, 100, 0x0b1220, { strokeColor: 0x64748b, strokeAlpha: 0.25, radius: 18 });
+    this.hud.actionPanel = createPanel(this, 0, 0, 100, 100, 0xffffff, { strokeColor: 0x15203a, strokeAlpha: 0.8, radius: 18 });
     this.hud.btnMeeting = createButton(this, 0, 0, '📋', () => net.callMeeting());
     this.hud.btnInteract = createButton(this, 0, 0, '🛠', () => this.tryOpenNearbyTask());
 
@@ -319,11 +314,87 @@ export class GameScene extends Phaser.Scene {
     this.repositionHUD(this.scale.width, this.scale.height);
   }
 
+  showRoleBriefing() {
+    if (this.briefingOpen) return;
+    this.briefingOpen = true;
+    const briefing = getRoleBriefing(this.myRole, this.roleText);
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const cardW = Math.min(520, w - 24);
+    const cardH = Math.min(360, h - 32);
+    const cx = w / 2;
+    const cy = h / 2;
+    const roleColors = { empleado: '#22c55e', jefe: '#d83a4a', lamebotas: '#b77900' };
+
+    const blocker = this.add.zone(cx, cy, w, h).setScrollFactor(0).setDepth(2000).setInteractive();
+    const shade = this.add.rectangle(0, 0, w, h, 0x172554, 0.82)
+      .setOrigin(0).setScrollFactor(0).setDepth(2000);
+    const panel = createPanel(this, cx, cy, cardW, cardH, 0xf8fafc, {
+      strokeColor: 0x15203a,
+      strokeAlpha: 1,
+      radius: 24
+    }).setScrollFactor(0).setDepth(2001);
+    const eyebrow = this.add.text(cx, cy - cardH / 2 + 34, 'TU EXPEDIENTE CONFIDENCIAL', {
+      fontSize: w < 500 ? '11px' : '13px',
+      color: '#64748b',
+      fontStyle: 'bold',
+      letterSpacing: 1
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+    const title = this.add.text(cx, cy - cardH / 2 + 78, briefing.label, {
+      fontSize: w < 500 ? '30px' : '40px',
+      color: roleColors[this.myRole] || '#2563eb',
+      fontStyle: 'bold'
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+    const mission = this.add.text(cx, cy - 32, briefing.mission, {
+      fontSize: w < 500 ? '16px' : '19px',
+      color: '#172554',
+      fontStyle: 'bold',
+      align: 'center',
+      wordWrap: { width: cardW - 56 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+    const objective = this.add.text(cx, cy + 26, `Objetivo privado: ${briefing.secondaryObjective}`, {
+      fontSize: w < 500 ? '12px' : '14px',
+      color: '#475569',
+      align: 'center',
+      wordWrap: { width: cardW - 56 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+    const firstStep = this.add.text(cx, cy + 82, briefing.firstStep, {
+      fontSize: w < 500 ? '12px' : '14px',
+      color: '#172554',
+      backgroundColor: '#f6c344',
+      padding: { x: 12, y: 8 },
+      align: 'center',
+      wordWrap: { width: cardW - 80 }
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2002);
+
+    const elements = [blocker, shade, panel, eyebrow, title, mission, objective, firstStep];
+    const dismiss = () => {
+      this.briefingOpen = false;
+      elements.forEach((element) => element.destroy());
+      button.bg.destroy();
+      button.label.destroy();
+      if (this.scale.width >= 600) {
+        this.showFloatingText(briefing.firstStep, 0xf6c344);
+      }
+    };
+    const button = createButton(this, cx, cy + cardH / 2 - 42, w < 500 ? 'EMPEZAR' : 'ENTENDIDO · EMPEZAR', dismiss, {
+      width: Math.min(280, cardW - 48),
+      height: 48,
+      bgColor: 0x2563eb,
+      bgHover: 0x1d4ed8,
+      fontSize: w < 500 ? '13px' : '15px',
+      radius: 14
+    });
+    [button.bg, button.label, button.hit, button.shadow].forEach((element) => element.setScrollFactor(0).setDepth(2003));
+  }
+
   loadDemoState(gs) {
     this.gameState = gs;
     this.syncPlayers(gs);
     this.updateHUD(gs);
-    this.showFloatingText('🧪 Sala demo cargada: probá tareas, sabotajes y cámara', 0xfbbf24);
+    if (this.scale.width >= 600) {
+      this.showFloatingText('🧪 Sala demo cargada: probá tareas, sabotajes y cámara', 0xfbbf24);
+    }
   }
 
   resize(gameSize) {
@@ -341,8 +412,8 @@ export class GameScene extends Phaser.Scene {
     // Redimensionar overlay de sabotaje
     if (this.sabotageOverlay) {
       this.sabotageOverlay.clear();
-      this.sabotageOverlay.fillStyle(0xef4444, 1);
-      this.sabotageOverlay.fillRect(0, 0, w, h);
+      this.sabotageOverlay.lineStyle(12, 0xd83a4a, 1);
+      this.sabotageOverlay.strokeRoundedRect(6, 6, w - 12, h - 12, 18);
     }
 
     // Reposicionar paneles abiertos
@@ -350,14 +421,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   repositionHUD(w, h) {
+    const layout = gameHudLayout(w, h);
     const compact = h < 700;
-    const narrow = w < 600;
+    const narrow = layout.mobile;
 
     // 1. Header Panel
-    const headerW = narrow ? w - 20 : Math.min(690, w - 120);
-    const headerH = compact ? 56 : 68;
-    const headerX = w / 2;
-    const headerY = compact ? 38 : 46;
+    const headerW = layout.header.width;
+    const headerH = layout.header.height;
+    const headerX = layout.header.x;
+    const headerY = layout.header.y;
 
     this.hud.headerPanel.drawPanel(headerX, headerY, headerW, headerH);
     this.hud.timerText.setPosition(headerX - (narrow ? 64 : 128), headerY - (compact ? 7 : 6));
@@ -390,47 +462,45 @@ export class GameScene extends Phaser.Scene {
     this.hud.roleDescription.setPosition(roleX, roleY + (narrow ? 10 : compact ? 18 : 21));
     this.hud.roleDescription.setFontSize(narrow ? '9px' : compact ? '10px' : '11px');
     this.hud.roleDescription.setStyle({ wordWrap: { width: roleW - (narrow ? 16 : compact ? 56 : 60) } });
+    [this.hud.rolePanel, this.hud.roleDisplay, this.hud.roleObjectiveLabel, this.hud.roleDescription]
+      .forEach((element) => element.setVisible(layout.showRolePanel));
 
-    // 3. Status/Moral Panel
-    let statusX, statusY, statusW, statusH;
+    // 3. Moral: integrada al encabezado en móvil; panel completo en escritorio.
     if (narrow) {
-      statusW = w - roleW - 30;
-      statusH = 76;
-      statusX = w - 10 - statusW / 2;
-      statusY = headerY + headerH / 2 + 10 + statusH / 2;
+      this.hud.statusPanel.setVisible(false);
+      this.hud.moraleLabel.setVisible(true).setPosition(headerX - 86, headerY + 17).setFontSize('9px');
+      const moraleBarW = 118;
+      const moraleBarX = headerX + 22;
+      const moraleBarY = headerY + 18;
+      this.hud.moraleBar.setVisible(true).setPosition(moraleBarX, moraleBarY).setSize(moraleBarW, 10);
+      this.hud.moraleFill.setVisible(true).setPosition(moraleBarX - moraleBarW / 2, moraleBarY);
+      this.hud.moraleFill.height = 10;
+      this.hud.tasksLabel.setVisible(false);
+      this.hud.tasksList.setVisible(false);
     } else {
-      statusW = compact ? 294 : 342;
-      statusH = compact ? 108 : 130;
-      statusX = compact ? w - 205 : w - 215;
-      statusY = compact ? h - 130 : h - 160;
+      const statusW = compact ? 294 : 342;
+      const statusH = compact ? 108 : 130;
+      const statusX = compact ? w - 205 : w - 215;
+      const statusY = compact ? h - 130 : h - 160;
+      this.hud.statusPanel.setVisible(true).drawPanel(statusX, statusY, statusW, statusH);
+
+      const moraleLabelX = statusX - statusW / 2 + 16;
+      const moraleLabelY = statusY - statusH / 2 + 12;
+      this.hud.moraleLabel.setVisible(true).setPosition(moraleLabelX, moraleLabelY).setFontSize(compact ? '12px' : '13px');
+
+      const moraleBarW = compact ? 146 : 168;
+      const moraleBarX = statusX + statusW / 2 - moraleBarW / 2 - 16;
+      const moraleBarY = moraleLabelY + 4;
+      this.hud.moraleBar.setVisible(true).setPosition(moraleBarX, moraleBarY).setSize(moraleBarW, 14);
+      this.hud.moraleFill.setVisible(true).setPosition(moraleBarX - moraleBarW / 2, moraleBarY);
+      this.hud.moraleFill.height = 14;
+
+      const tasksLabelY = moraleLabelY + (compact ? 27 : 30);
+      this.hud.tasksLabel.setVisible(layout.showTaskList).setPosition(moraleLabelX, tasksLabelY).setFontSize('11px');
+      this.hud.tasksList.setVisible(layout.showTaskList).setPosition(moraleLabelX, tasksLabelY + 18);
+      this.hud.tasksList.setFontSize(compact ? '10px' : '11px');
+      this.hud.tasksList.setStyle({ wordWrap: { width: statusW - 32 } });
     }
-
-    this.hud.statusPanel.drawPanel(statusX, statusY, statusW, statusH);
-
-    const moraleLabelX = statusX - statusW / 2 + 16;
-    const moraleLabelY = statusY - statusH / 2 + 12;
-    this.hud.moraleLabel.setPosition(moraleLabelX, moraleLabelY);
-    this.hud.moraleLabel.setFontSize(narrow ? '10px' : compact ? '12px' : '13px');
-
-    const moraleBarW = narrow ? statusW - 120 : compact ? 146 : 168;
-    const moraleBarX = statusX + statusW / 2 - moraleBarW / 2 - 16;
-    const moraleBarY = moraleLabelY + (narrow ? 6 : 4);
-    this.hud.moraleBar.setPosition(moraleBarX, moraleBarY);
-    this.hud.moraleBar.setSize(moraleBarW, 14);
-    this.hud.moraleFill.setPosition(moraleBarX - moraleBarW / 2, moraleBarY);
-    this.hud.moraleFill.height = 14;
-
-    const tasksLabelX = moraleLabelX;
-    const tasksLabelY = moraleLabelY + (narrow ? 18 : compact ? 27 : 30);
-    this.hud.tasksLabel.setPosition(tasksLabelX, tasksLabelY);
-    this.hud.tasksLabel.setFontSize(narrow ? '9px' : '11px');
-    this.hud.tasksLabel.setVisible(!narrow);
-
-    const tasksListX = moraleLabelX;
-    const tasksListY = narrow ? tasksLabelY : tasksLabelY + 18;
-    this.hud.tasksList.setPosition(tasksListX, tasksListY);
-    this.hud.tasksList.setFontSize(narrow ? '9px' : compact ? '10px' : '11px');
-    this.hud.tasksList.setStyle({ wordWrap: { width: statusW - 32 } });
 
     // 4. Action Panel & Buttons
     let actionX, actionY, actionW, actionH, btnY;
@@ -443,8 +513,8 @@ export class GameScene extends Phaser.Scene {
       this.hud.actionPanel.drawPanel(actionX, actionY, actionW, actionH);
       this.hud.actionPanel.setVisible(false);
 
-      const mainBtnX = w - 50;
-      const mainBtnY = h - 50;
+      const mainBtnX = layout.actions.x;
+      const mainBtnY = layout.actions.y;
       this.hud.btnInteract.setPositionAndSize(mainBtnX, mainBtnY, 56, 56);
       this.hud.btnInteract.label.setFontSize('22px');
 
@@ -484,20 +554,30 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.sabotageBanner) {
-      this.sabotageBanner.setPosition(w / 2, headerY + headerH / 2 + 18);
+      const wide = w >= 900;
+      this.sabotageBanner.setPosition(wide ? w - 190 : w / 2, wide ? 32 : headerY + headerH / 2 + 18);
+      this.sabotageBanner.setFontSize(wide ? '11px' : '10px');
+      this.sabotageBanner.setStyle({ wordWrap: { width: wide ? 340 : w - 32 }, align: 'center' });
     }
 
     // 5. Mobile Pad Controls (D-pad)
-    this.hud.mobileControls.forEach((btn) => btn.bg?.destroy?.());
+    this.hud.mobileControls.forEach((btn) => {
+      btn.bg?.destroy?.();
+      btn.label?.destroy?.();
+      btn.hit?.destroy?.();
+      btn.shadow?.destroy?.();
+    });
     this.hud.mobileControls = [];
 
     if (w <= 900) {
-      const baseX = 70;
-      const baseY = h - 70;
+      const baseX = layout.dpad.x;
+      const baseY = layout.dpad.y;
+      const offset = narrow ? 42 : 38;
+      const size = narrow ? 44 : 40;
 
       const makePad = (px, py, label, key) => {
         const btn = createButton(this, px, py, label, () => {}, {
-          width: 34, height: 34, bgColor: 0x334155, bgHover: 0x475569, fontSize: '12px', radius: 10
+          width: size, height: size, bgColor: 0x172554, bgHover: 0x2563eb, fontSize: '15px', radius: 12
         });
         btn.hit.on('pointerdown', () => { this.mobileInput[key] = true; });
         btn.hit.on('pointerup', () => { this.mobileInput[key] = false; });
@@ -511,10 +591,10 @@ export class GameScene extends Phaser.Scene {
         this.hud.mobileControls.push(btn);
       };
 
-      makePad(baseX, baseY - 32, '↑', 'up');
-      makePad(baseX, baseY + 32, '↓', 'down');
-      makePad(baseX - 34, baseY, '←', 'left');
-      makePad(baseX + 34, baseY, '→', 'right');
+      makePad(baseX, baseY - offset, '↑', 'up');
+      makePad(baseX, baseY + offset, '↓', 'down');
+      makePad(baseX - offset, baseY, '←', 'left');
+      makePad(baseX + offset, baseY, '→', 'right');
     }
 
     this.updateHUD(this.gameState);
@@ -596,19 +676,28 @@ export class GameScene extends Phaser.Scene {
   }
 
   setupSocketListeners() {
-    net.socket.on('game:started', (gs) => {
+    net.disposeAll(this.networkDisposers);
+    const on = (event, handler) => this.networkDisposers.push(net.subscribe(event, handler));
+
+    on('game:started', (gs) => {
       this.gameState = gs;
       this.syncPlayers(gs);
       this.updateHUD(gs);
     });
 
-    net.socket.on('game:update', (gs) => {
+    on('game:update', (gs) => {
       this.gameState = gs;
       this.syncPlayers(gs);
       this.updateHUD(gs);
     });
 
-    net.socket.on('game:tick', (data) => {
+    on('game:private', ({ playerId, cooldowns }) => {
+      if (playerId !== this.myId || !this.players[this.myId]) return;
+      this.players[this.myId].cooldowns = { ...(cooldowns || {}) };
+      this.updateHUD(this.gameState);
+    });
+
+    on('game:tick', (data) => {
       if (!this.gameState) this.gameState = {};
       this.gameState.timeRemaining = data.timeRemaining;
       this.gameState.taskPercent = data.taskPercent;
@@ -639,7 +728,7 @@ export class GameScene extends Phaser.Scene {
       this.updateHUD(this.gameState);
     });
 
-    net.socket.on('player:moved', ({ playerId, x, y }) => {
+    on('player:moved', ({ playerId, x, y }) => {
       if (this.players[playerId]) {
         if (playerId === this.myId) {
           const localSprite = this.sprites[playerId];
@@ -661,7 +750,7 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    net.socket.on('task:completed', ({ taskId, completedBy, playerName }) => {
+    on('task:completed', ({ taskId, completedBy, playerName }) => {
       const task = CLIENT_TASKS.find((t) => t.id === taskId);
       this.showFloatingText(`${playerName} completó: ${task?.name || taskId}`, 0x4ade80);
       if (this.activeTaskPanel && this.activeTaskPanel.taskId === taskId) {
@@ -669,53 +758,62 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    net.socket.on('sabotage:triggered', (data) => {
+    on('sabotage:triggered', (data) => {
       const label = data.type === 'fake_task' ? 'un compañero está fingiendo trabajar' : `zona ${data.zoneId}`;
       this.showFloatingText(`⚠ Sabotaje: ${label}`, 0xef4444);
     });
 
-    net.socket.on('sabotage:extra_task', () => {
+    on('sabotage:extra_task', () => {
       this.showFloatingText('Asignaste tarea extra! -10 moral', 0xef4444);
     });
 
-    net.socket.on('sabotage:morale', () => {
+    on('sabotage:morale', () => {
       this.showFloatingText('Moral bajada por el jefe! -20', 0xef4444);
     });
 
-    net.socket.on('sabotage:door_closed', ({ zoneId }) => {
+    on('sabotage:door_closed', ({ zoneId }) => {
       this.showFloatingText(`Puerta cerrada: ${zoneId}`, 0xf59e0b);
     });
 
-    net.socket.on('sabotage:fake_task', () => {
+    on('sabotage:fake_task', () => {
       this.showFloatingText('Fingiste una tarea. Nadie sospecha... todavía.', 0xfacc15);
     });
 
-    net.socket.on('sabotage:false_report', () => {
+    on('sabotage:false_report', () => {
       this.showFloatingText('📣 Reporte falso: la oficina entra en pánico', 0xef4444);
     });
 
-    net.socket.on('sabotage:block_task', ({ taskId }) => {
+    on('sabotage:block_task', ({ taskId }) => {
       this.showFloatingText(`⛔ Tarea bloqueada: ${taskId}`, 0xef4444);
     });
 
-    net.socket.on('sabotage:reported', ({ playerName, sabotageType, zoneId, taskId }) => {
+    on('sabotage:reported', ({ playerName, sabotageType, zoneId, taskId }) => {
       const where = zoneId || taskId || sabotageType;
       this.showFloatingText(`🚨 ${playerName} reportó sabotaje: ${where}`, 0xf97316);
     });
 
-    net.socket.on('meeting:started', ({ calledBy, playerName }) => {
+    on('meeting:started', ({ calledBy, playerName }) => {
       this.showFloatingText(`Reunión convocada por ${playerName}`, 0xfbbf24);
-      this.scene.stop('GameScene');
-      this.scene.launch('MeetingScene', { roomCode: this.roomCode, myId: this.myId, myRole: this.myRole });
+      const players = Object.values(this.players).map(({ id, name, x, y, morale, burnout, tasksCompleted }) => ({
+        id, name, x, y, morale, burnout, tasksCompleted
+      }));
+      this.scene.pause('GameScene');
+      this.scene.launch('MeetingScene', {
+        roomCode: this.roomCode,
+        myId: this.myId,
+        myRole: this.myRole,
+        players
+      });
       this.scene.bringToTop('MeetingScene');
     });
 
-    net.socket.on('game:ended', (data) => {
+    on('game:ended', (data) => {
+      this.scene.stop('MeetingScene');
       this.scene.stop('GameScene');
       this.scene.start('EndScene', data);
     });
 
-    net.socket.on('error:message', ({ message }) => {
+    on('error:message', ({ message }) => {
       this.showFloatingText(message, 0xef4444);
     });
   }
@@ -784,8 +882,8 @@ export class GameScene extends Phaser.Scene {
         this.sabotageOverlay.setAlpha(0);
         this.sabotageTween = this.tweens.add({
           targets: this.sabotageOverlay,
-          alpha: 0.28,
-          duration: 900,
+          alpha: 0.72,
+          duration: 650,
           yoyo: true,
           repeat: -1
         });
@@ -820,6 +918,11 @@ export class GameScene extends Phaser.Scene {
     // Movimiento del jugador local
     const me = this.players[this.myId];
     if (!me) return;
+
+    if (this.briefingOpen) {
+      this.sprites[this.myId]?.container?.body?.setVelocity(0, 0);
+      return;
+    }
 
     // No mover si está en burnout (el servidor lo maneja, pero reducimos visualmente)
     let speed = 250;
@@ -866,28 +969,11 @@ export class GameScene extends Phaser.Scene {
   tryOpenNearbyTask() {
     const me = this.players[this.myId];
     if (!me) return;
-    const zones = [
-      { id: 'recepcion', name: 'Recepción', x: 100, y: 100, w: 250, h: 200 },
-      { id: 'cubiculos', name: 'Cubículos', x: 450, y: 100, w: 300, h: 200 },
-      { id: 'juntas', name: 'Sala de Juntas', x: 850, y: 100, w: 250, h: 200 },
-      { id: 'cocina', name: 'Cocina', x: 100, y: 400, w: 200, h: 180 },
-      { id: 'archivo', name: 'Archivo', x: 400, y: 400, w: 200, h: 180 },
-      { id: 'jefe_oficina', name: 'Oficina del Jefe', x: 700, y: 400, w: 200, h: 180 },
-      { id: 'rh', name: 'Recursos Humanos', x: 100, y: 650, w: 250, h: 180 },
-      { id: 'servidor', name: 'Servidor / IT', x: 500, y: 650, w: 250, h: 180 }
-    ];
-    let nearestTask = null;
-    let minDist = Infinity;
-    for (const z of zones) {
-      const task = CLIENT_TASKS.find((t) => t.zone === z.id);
-      if (!task) continue;
-      const dist = Phaser.Math.Distance.Between(me.x, me.y, z.x + z.w / 2, z.y + z.h / 2);
-      if (dist < minDist) {
-        minDist = dist;
-        nearestTask = task;
-      }
-    }
-    if (nearestTask && minDist < this.getTaskInteractionDistance()) {
+    const zone = findNearestTaskZone(me.x, me.y);
+    const nearestTask = zone && CLIENT_TASKS.find((task) => task.zone === zone.id);
+    const center = zone && getZoneCenter(zone.id);
+    const distance = center ? Phaser.Math.Distance.Between(me.x, me.y, center.x, center.y) : Infinity;
+    if (nearestTask && distance < this.getTaskInteractionDistance()) {
       this.openTaskPanel(nearestTask);
     } else {
       this.showFloatingText('Acércate a una zona y presiona E para trabajar', 0xfbbf24);
@@ -898,16 +984,7 @@ export class GameScene extends Phaser.Scene {
     // Verificar si click está cerca de una zona con tarea
     const clickX = pointer.worldX;
     const clickY = pointer.worldY;
-    const zones = [
-      { id: 'recepcion', name: 'Recepción', x: 100, y: 100, w: 250, h: 200 },
-      { id: 'cubiculos', name: 'Cubículos', x: 450, y: 100, w: 300, h: 200 },
-      { id: 'juntas', name: 'Sala de Juntas', x: 850, y: 100, w: 250, h: 200 },
-      { id: 'cocina', name: 'Cocina', x: 100, y: 400, w: 200, h: 180 },
-      { id: 'archivo', name: 'Archivo', x: 400, y: 400, w: 200, h: 180 },
-      { id: 'jefe_oficina', name: 'Oficina del Jefe', x: 700, y: 400, w: 200, h: 180 },
-      { id: 'rh', name: 'Recursos Humanos', x: 100, y: 650, w: 250, h: 180 },
-      { id: 'servidor', name: 'Servidor / IT', x: 500, y: 650, w: 250, h: 180 }
-    ];
+    const zones = OFFICE_ZONES;
 
     for (const z of zones) {
       if (clickX >= z.x && clickX <= z.x + z.w && clickY >= z.y && clickY <= z.y + z.h) {
@@ -1298,18 +1375,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   showFloatingText(text, color = 0xffffff) {
-    const ft = this.add.text(this.scale.width / 2, 92, text, {
-      fontSize: '16px',
+    const mobile = this.scale.width < 600;
+    const startY = mobile ? 88 : 92;
+    const ft = this.add.text(this.scale.width / 2, startY, text, {
+      fontSize: mobile ? '12px' : '16px',
       color: '#' + color.toString(16).padStart(6, '0'),
       fontStyle: 'bold',
-      backgroundColor: '#00000088',
-      padding: { x: 10, y: 5 },
+      backgroundColor: '#172554e6',
+      padding: { x: mobile ? 8 : 10, y: mobile ? 4 : 5 },
       align: 'center',
-      wordWrap: { width: this.scale.width - 40 }
+      wordWrap: { width: this.scale.width - (mobile ? 48 : 40) }
     }).setOrigin(0.5).setScrollFactor(0).setDepth(9999);
     this.tweens.add({
       targets: ft,
-      y: 74,
+      y: mobile ? 76 : 74,
       alpha: 0,
       duration: 2500,
       onComplete: () => ft.destroy()
@@ -1324,17 +1403,16 @@ export class GameScene extends Phaser.Scene {
     if (!this.textures.exists('floor_carpet_general')) {
       const tex = this.textures.createCanvas('floor_carpet_general', 60, 60);
       const ctx = tex.context;
-      ctx.fillStyle = '#1e293b'; // slate-800
+      ctx.fillStyle = '#dbeafe';
       ctx.fillRect(0, 0, 60, 60);
 
-      // Carpet grain effect
-      ctx.fillStyle = '#0f172a';
-      for (let i = 0; i < 35; i++) ctx.fillRect(Math.random() * 60, Math.random() * 60, 1.5, 1.5);
-      ctx.fillStyle = '#334155';
-      for (let i = 0; i < 25; i++) ctx.fillRect(Math.random() * 60, Math.random() * 60, 1.5, 1.5);
+      // Fibra suave de alfombra clara, sin ruido aleatorio que cambie entre sesiones.
+      ctx.fillStyle = '#bfdbfe';
+      for (let x = 8; x < 60; x += 18) for (let y = 8; y < 60; y += 18) ctx.fillRect(x, y, 2, 2);
+      ctx.fillStyle = '#ffffff';
+      for (let x = 16; x < 60; x += 24) for (let y = 4; y < 60; y += 24) ctx.fillRect(x, y, 1.5, 1.5);
 
-      // Fine grid tile boundaries
-      ctx.strokeStyle = '#0f172a';
+      ctx.strokeStyle = '#93c5fd';
       ctx.lineWidth = 0.5;
       ctx.strokeRect(0, 0, 60, 60);
       tex.refresh();
@@ -1363,11 +1441,11 @@ export class GameScene extends Phaser.Scene {
     if (!this.textures.exists('floor_server_grid')) {
       const tex = this.textures.createCanvas('floor_server_grid', 80, 80);
       const ctx = tex.context;
-      ctx.fillStyle = '#090d16'; // deep futuristic dark blue
+      ctx.fillStyle = '#dbeafe';
       ctx.fillRect(0, 0, 80, 80);
 
-      // Metallic frame lines
-      ctx.strokeStyle = '#1e293b';
+      // Rejilla técnica clara.
+      ctx.strokeStyle = '#93c5fd';
       ctx.lineWidth = 1;
       ctx.strokeRect(0, 0, 80, 80);
 

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OfiChaos — Dirección visual</title>
+<style>
+  :root {
+    --blue:#2563eb; --blue-hi:#60a5fa; --navy:#172554; --paper:#f8fafc;
+    --coral:#f05a5a; --yellow:#f6c344; --green:#22c55e; --slate:#64748b;
+    --line:#15203a; --shadow:#0f172a2b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#dbeafe;color:var(--navy);font-family:Inter,ui-rounded,"Arial Rounded MT Bold",system-ui,sans-serif}
+  main{width:1440px;min-height:900px;padding:54px 64px;background:
+    radial-gradient(circle at 86% 8%,#fff 0 7%,transparent 7.2%),
+    linear-gradient(165deg,#eff6ff 0 62%,#dbeafe 62% 100%);overflow:hidden;position:relative}
+  header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:38px}
+  h1{margin:0;font-size:68px;line-height:.9;letter-spacing:-.035em;color:var(--navy);text-shadow:0 5px 0 #fff,0 9px 0 #bfdbfe}
+  h1 span{color:var(--blue)}
+  header p{max-width:540px;margin:8px 0 0;font-size:19px;line-height:1.45;font-weight:650;color:#334155}
+  .tag{display:inline-flex;align-items:center;gap:10px;background:var(--yellow);border:3px solid var(--line);box-shadow:0 5px 0 var(--line);border-radius:999px;padding:10px 17px;font-weight:900;transform:rotate(1.5deg)}
+  .dot{width:12px;height:12px;border-radius:50%;background:var(--coral);border:2px solid var(--line)}
+  .grid{display:grid;grid-template-columns:1.02fr 1.28fr;gap:30px}
+  .sheet{background:#ffffff;border:3px solid var(--line);border-radius:16px;box-shadow:0 10px 0 var(--line);padding:26px}
+  h2{margin:0 0 18px;font-size:21px;letter-spacing:-.02em}
+  .swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .swatch{height:128px;border:3px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;justify-content:space-between;font-weight:900;box-shadow:0 5px 0 #cbd5e1}
+  .swatch small{font:800 12px/1 system-ui;text-transform:uppercase;letter-spacing:.05em}
+  .navy{background:var(--navy);color:white}.blue{background:var(--blue);color:white}.sky{background:var(--blue-hi)}.paper{background:var(--paper)}
+  .coral{background:var(--coral)}.yellow{background:var(--yellow)}.green{background:var(--green)}.slate{background:#cbd5e1}
+  .component-stack{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .button{height:76px;border:3px solid var(--line);border-radius:14px;background:var(--blue);box-shadow:0 7px 0 var(--line);color:#fff;display:flex;align-items:center;justify-content:center;font-size:23px;font-weight:950;letter-spacing:-.02em}
+  .button::before{content:"";width:15px;height:15px;background:var(--yellow);border:3px solid var(--line);border-radius:50%;margin-right:13px}
+  .meter-card{border:3px solid var(--line);border-radius:14px;background:var(--paper);padding:16px}
+  .meter-head{display:flex;justify-content:space-between;font-weight:900;margin-bottom:11px}
+  .meter{height:22px;border:3px solid var(--line);border-radius:999px;background:#e2e8f0;overflow:hidden}
+  .meter>i{display:block;width:72%;height:100%;background:var(--green);border-right:3px solid var(--line)}
+  .badge-row{display:flex;gap:12px;margin-top:18px}
+  .badge{flex:1;border:3px solid var(--line);border-radius:11px;padding:13px 12px;font-weight:900;background:var(--yellow);box-shadow:0 4px 0 var(--line)}
+  .alert{background:var(--coral);color:#fff;transform:rotate(-1deg)}
+  .stage{margin-top:28px;display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:stretch}
+  .office{position:relative;min-height:252px;background:#bfdbfe;border:3px solid var(--line);border-radius:16px;box-shadow:0 9px 0 var(--line);overflow:hidden}
+  .office::before{content:"";position:absolute;inset:0;background:linear-gradient(#fff7 1px,transparent 1px);background-size:100% 68px;opacity:.36}
+  .desk{position:absolute;left:38px;right:38px;bottom:24px;height:55px;background:#f6c344;border:3px solid var(--line);border-radius:12px;box-shadow:0 7px 0 var(--line)}
+  .monitor{position:absolute;width:78px;height:60px;bottom:74px;left:calc(50% - 39px);background:#f8fafc;border:3px solid var(--line);border-radius:9px;box-shadow:inset 0 0 0 7px var(--blue)}
+  .people{height:252px;display:flex;align-items:flex-end;justify-content:center;gap:32px;padding-bottom:22px;position:relative;z-index:1}
+  .person{width:112px;height:190px;position:relative}
+  .head{position:absolute;top:5px;left:24px;width:68px;height:72px;border:4px solid var(--line);border-radius:48% 52% 45% 45%;background:#ffd6b0;z-index:4}
+  .hair{position:absolute;inset:-4px -4px auto;height:34px;border:4px solid var(--line);border-radius:50% 50% 38% 38%;background:#334155}
+  .eyes{position:absolute;top:37px;left:17px;width:8px;height:8px;border-radius:50%;background:var(--line);box-shadow:23px 0 0 var(--line)}
+  .body{position:absolute;top:70px;left:15px;width:84px;height:88px;border:4px solid var(--line);border-radius:18px 18px 12px 12px;background:var(--blue);z-index:3}
+  .tie{position:absolute;top:0;left:34px;width:12px;height:46px;background:var(--coral);clip-path:polygon(50% 0,100% 26%,72% 100%,28% 100%,0 26%)}
+  .legs{position:absolute;top:151px;left:26px;width:60px;height:37px;border-left:15px solid var(--navy);border-right:15px solid var(--navy)}
+  .person.stress{transform:rotate(3deg)} .person.stress .body{background:var(--coral)}
+  .person.stress .head{transform:rotate(-5deg)}
+  .bolt{position:absolute;right:-6px;top:8px;width:31px;height:48px;background:var(--yellow);border:3px solid var(--line);clip-path:polygon(45% 0,100% 0,68% 42%,100% 42%,26% 100%,43% 54%,6% 54%)}
+  .rules{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .rule{padding:18px;border:3px solid var(--line);border-radius:12px;background:#fff;font-weight:850;line-height:1.25}
+  .rule b{display:block;color:var(--blue);font-size:25px;margin-bottom:5px}
+  footer{position:absolute;right:64px;bottom:22px;font-weight:800;color:#475569}
+</style>
+</head>
+<body><main>
+<header><div><h1>OFI<span>CHAOS</span></h1><p>Una jornada brillante, legible y adorable que se descompone visualmente cuando la oficina entra en crisis.</p></div><div class="tag"><span class="dot"></span> CARICATURA 2D · WEB PARTY GAME</div></header>
+<section class="grid">
+  <div class="sheet"><h2>Paleta funcional</h2><div class="swatches">
+    <div class="swatch blue"><small>Identidad</small><span>#2563EB</span></div><div class="swatch navy"><small>Tinta</small><span>#172554</span></div>
+    <div class="swatch paper"><small>Superficie</small><span>#F8FAFC</span></div><div class="swatch sky"><small>Amistoso</small><span>#60A5FA</span></div>
+    <div class="swatch coral"><small>Sabotaje</small><span>#F05A5A</span></div><div class="swatch yellow"><small>Tareas</small><span>#F6C344</span></div>
+    <div class="swatch green"><small>Progreso</small><span>#22C55E</span></div><div class="swatch slate"><small>Neutral</small><span>#CBD5E1</span></div>
+  </div></div>
+  <div class="sheet"><h2>Material de interfaz</h2><div class="component-stack">
+    <div class="button">EMPEZAR TURNO</div>
+    <div class="meter-card"><div class="meter-head"><span>Moral</span><span>72%</span></div><div class="meter"><i></i></div></div>
+  </div><div class="badge-row"><div class="badge">ENCARGO · CAFETERA</div><div class="badge alert">CRISIS · IMPRESORA</div></div>
+  <div class="stage"><div class="office"><div class="monitor"></div><div class="desk"></div></div><div class="people"><div class="person"><div class="head"><i class="hair"></i><i class="eyes"></i></div><div class="body"><i class="tie"></i></div><div class="legs"></div></div><div class="person stress"><i class="bolt"></i><div class="head"><i class="hair"></i><i class="eyes"></i></div><div class="body"><i class="tie"></i></div><div class="legs"></div></div></div></div>
+</section>
+<section class="rules" style="margin-top:28px"><div class="rule"><b>01</b>Siluetas claras y expresivas.</div><div class="rule"><b>02</b>Color informa; nunca revela roles.</div><div class="rule"><b>03</b>El caos altera el mundo visible.</div></section>
+<footer>STYLE TILE · OFICHAOS / V1</footer>
+</main></body></html>

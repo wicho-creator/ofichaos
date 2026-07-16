@@ -1,14 +1,15 @@
 // proposed_player.js — Clean programmatic sprite textures, animations and physics integration
 // Proposed rewrite for client/src/systems/player.js
 
-export const PLAYER_COLORS = {
-  empleado: 0x4ade80,
-  jefe: 0xef4444,
-  lamebotas: 0xfacc15,
-  unknown: 0x60a5fa
-};
+const PLAYER_VARIANTS = ['sky', 'mint', 'amber', 'violet'];
 
-const ROLE_EMOJI = { empleado: '💼', jefe: '👔', lamebotas: '⭐', unknown: '🙂' };
+export function getPlayerVariant(player, isLocal) {
+  if (isLocal) return 'local';
+  const id = String(player?.id || 'unknown');
+  let hash = 0;
+  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return PLAYER_VARIANTS[hash % PLAYER_VARIANTS.length];
+}
 
 /**
  * Draws a single frame of the office worker onto an HTML5 Canvas context.
@@ -208,11 +209,11 @@ function drawWorkerFrame(ctx, w, h, colorStr, frameType) {
  */
 export function setupPlayerTexturesAndAnims(scene) {
   const colorMap = {
-    local: '#60a5fa',      // Bright blue
-    empleado: '#4ade80',   // Green
-    jefe: '#ef4444',       // Red
-    lamebotas: '#facc15',   // Yellow
-    unknown: '#60a5fa'     // Default blue
+    local: '#2563eb',
+    sky: '#60a5fa',
+    mint: '#34d399',
+    amber: '#f6c344',
+    violet: '#a78bfa'
   };
 
   const w = 64;
@@ -269,30 +270,31 @@ export function setupPlayerTexturesAndAnims(scene) {
  * Creates the client-side player container representing the office worker.
  */
 export function createPlayerSprite(scene, player, isLocal) {
-  const role = player.role || 'unknown';
-  const animKeySuffix = isLocal ? 'local' : role;
+  const variant = getPlayerVariant(player, isLocal);
 
   // Initialize textures & animations dynamically
   setupPlayerTexturesAndAnims(scene);
 
-  // Components: shadow, character sprite, badge text, name label, and burnout glow
-  const shadow = scene.add.ellipse(0, 22, 38, 10, 0x000000, 0.3);
+  // Components: shadow, character sprite, self marker, name label, and burnout glow
+  const shadow = scene.add.ellipse(0, 24, 44, 12, 0x172554, 0.22);
   
-  const charSprite = scene.add.sprite(0, 0, `player_${animKeySuffix}_idle`);
-  charSprite.play(`anim_${animKeySuffix}_idle`);
+  const charSprite = scene.add.sprite(0, 0, `player_${variant}_idle`).setScale(1.16);
+  charSprite.play(`anim_${variant}_idle`);
 
-  // Role Emoji Badge (drawn slightly above head)
-  const badge = scene.add.text(0, -22, ROLE_EMOJI[role] || ROLE_EMOJI.unknown, {
-    fontSize: '14px'
+  const badge = scene.add.text(0, -32, isLocal ? '▼' : '', {
+    fontSize: '16px',
+    color: '#2563eb',
+    fontStyle: 'bold',
+    stroke: '#ffffff',
+    strokeThickness: 3
   }).setOrigin(0.5);
 
-  // Player Name Label (drawn further above head)
-  const label = scene.add.text(0, -38, player.name || '?', {
-    fontSize: '11px',
-    color: '#ffffff',
+  const label = scene.add.text(0, -48, player.name || '?', {
+    fontSize: '12px',
+    color: '#172554',
     fontStyle: 'bold',
-    backgroundColor: '#00000077',
-    padding: { x: 5, y: 2 }
+    backgroundColor: '#ffffffdd',
+    padding: { x: 6, y: 3 }
   }).setOrigin(0.5);
 
   // Burnout Glow effect
@@ -335,8 +337,7 @@ export function updatePlayerSprite(sprite, player, isLocal) {
   }
 
   sprite.label.setText(player.name || '?');
-  const role = player.role || 'unknown';
-  sprite.badge.setText(ROLE_EMOJI[role] || ROLE_EMOJI.unknown);
+  sprite.badge.setText(isLocal ? '▼' : '');
 
   // Determine movement velocity direction
   let vx = 0;
@@ -355,11 +356,11 @@ export function updatePlayerSprite(sprite, player, isLocal) {
   }
 
   const isMoving = Math.abs(vx) > 0.5 || Math.abs(vy) > 0.5;
-  const animKeySuffix = isLocal ? 'local' : role;
+  const variant = getPlayerVariant(player, isLocal);
 
   if (sprite.charSprite) {
     if (isMoving) {
-      sprite.charSprite.play(`anim_${animKeySuffix}_walk`, true);
+      sprite.charSprite.play(`anim_${variant}_walk`, true);
       // Flip texture depending on horizontal walking direction
       if (vx < -0.5) {
         sprite.charSprite.setFlipX(true);
@@ -367,7 +368,7 @@ export function updatePlayerSprite(sprite, player, isLocal) {
         sprite.charSprite.setFlipX(false);
       }
     } else {
-      sprite.charSprite.play(`anim_${animKeySuffix}_idle`, true);
+      sprite.charSprite.play(`anim_${variant}_idle`, true);
     }
   }
 

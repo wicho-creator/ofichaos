@@ -2,6 +2,15 @@
 
 export const socket = io();
 
+export function subscribe(event, handler) {
+  socket.on(event, handler);
+  return () => socket.off(event, handler);
+}
+
+export function disposeAll(disposers) {
+  for (const dispose of disposers.splice(0)) dispose();
+}
+
 export function createRoom(name) {
   socket.emit('room:create', { name });
 }
